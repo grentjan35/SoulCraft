@@ -79,26 +79,36 @@ app.get('/api/hitboxes', (req, res) => {
 });
 
 function createPlayer(id, name = 'Player', character = 'spartan') {
-  // Ground is at Y=450, spawn players standing on it
+  const spawnX = 400 + Math.random() * 800;
   return {
     id,
-    name: String(name).slice(0, 20),
+    name,
     character,
-    x: 200 + Math.random() * 400,
-    y: 450, // Ground level
+    x: spawnX,
+    y: 200, // SPAWN IN AIR to fall down
     vx: 0,
     vy: 0,
-    onGround: true,
-    facingRight: true,
     speed: 200,
+    facingRight: true,
+    onGround: false, // Start in air
     hp: 100,
     maxHp: 100,
-    state: 'idle',
+    kills: 0,
+    state: 'air', // Start in air state
     animationFrame: 0,
     animationTime: 0,
     isAttacking: false,
     attackCooldown: 0,
-    lastInputSeq: 0
+    attackStuckTimer: 0,
+    airStuckTimer: 0,
+    landingTime: 0,
+    isJumping: false,
+    hasDoubleJump: false,
+    jumpPressed: false,
+    lastInputSeq: 0,
+    invincible: true, // SPAWN INVINCIBILITY
+    invincibleTime: 2.0, // 2 seconds
+    alive: true // Track if player is alive
   };
 }
 
@@ -127,10 +137,41 @@ io.on('connection', (socket) => {
     p.lastInputSeq = data.seq;
     p._latestInput = data;
     
-    // Handle jump
-    if (data.jump && p.onGround) {
-      p.vy = -400; // Jump velocity
-      p.onGround = false;
+    // Handle jump and double jump
+    if (data.jump && !p.jumpPressed) {
+      p.jumpPressed = true;
+      
+      // First jump (on ground)
+      if (p.onGround && !p.isJumping) {
+        p.isJumping = true;
+        p.hasDoubleJump = true; // Enable double jump
+        p.vy = -400; // Jump velocity
+        p.onGround = false;
+        p.state = 'air';
+        p.animationFrame = 0;
+        p.animationTime = 0;
+        // Cancel attack if jumping
+        p.isAttacking = false;
+      }
+      // Double jump (in air) - WORKS EVEN WHILE ATTACKING
+      else if (!p.onGround && p.hasDoubleJump) {
+        p.vy = -400; // Double jump velocity
+        p.hasDoubleJump = false; // Can't triple jump
+        p.state = 'air';
+        p.animationFrame = 0;
+        p.animationTime = 0;
+        // Cancel attack when double jumping
+        p.isAttacking = false;
+        p.attackStuckTimer = 0;
+        
+        // Emit double jump event for motion blur effect
+        io.emit('playerDoubleJump', { id: p.id });
+      }
+    }
+    
+    // Reset jump press when key released
+    if (!data.jump) {
+      p.jumpPressed = false;
     }
   });
 
@@ -143,28 +184,98 @@ io.on('connection', (socket) => {
   socket.on('error', (error) => {
     console.error('Socket error for', socket.id, error);
   });
+  
+  // Chat messages
+  socket.on('chatMessage', (data) => {
+    const player = players[socket.id];
+    if (player && data.message) {
+      const message = String(data.message).slice(0, 200).trim();
+      if (message) {
+        io.emit('chatMessage', {
+          id: socket.id,
+          name: player.name,
+          message: message,
+          timestamp: Date.now()
+        });
+      }
+    }
+  });
+  
+  // Emoji events
+  socket.on('emoji', (data) => {
+    const player = players[socket.id];
+    if (player && data.emojiNumber >= 1 && data.emojiNumber <= 9) {
+      // Broadcast to other players (sender already shows it locally)
+      socket.broadcast.emit('emoji', {
+        playerId: socket.id,
+        emojiNumber: data.emojiNumber
+      });
+    }
+  });
 });
 
 function updateGame(dt) {
-  const GROUND_Y = 450;
+  const GROUND_Y = 750; // Updated for larger world
   const GRAVITY = 1200;
   
   for (const id in players) {
     const p = players[id];
+    
+    // Skip dead players - they don't update!
+    if (!p.alive) continue;
+    
     const input = p._latestInput || { left: false, right: false, attack: false, jump: false };
+    
+    // Track previous ground state for landing detection
+    const wasOnGround = p.onGround;
     
     // Update attack cooldown
     if (p.attackCooldown > 0) {
       p.attackCooldown -= dt;
     }
     
-    // Handle attack
-    if (input.attack && p.attackCooldown <= 0 && !p.isAttacking) {
+    // Update spawn invincibility
+    if (p.invincible) {
+      if (p.invincibleTime > 0) {
+        p.invincibleTime -= dt;
+        if (p.invincibleTime <= 0) {
+          p.invincible = false;
+          p.invincibleTime = 0; // Reset to 0
+          console.log(`Player ${p.id} invincibility ended`);
+        }
+      } else {
+        // Failsafe: if invincible but time is 0 or negative, turn it off
+        p.invincible = false;
+        p.invincibleTime = 0;
+        console.log(`Player ${p.id} invincibility force-ended (failsafe)`);
+      }
+    }
+    
+    // Update landing animation timer
+    if (p.landingTime > 0) {
+      p.landingTime -= dt;
+      if (p.landingTime <= 0) {
+        // Landing finished - only change state if still in land state
+        if (p.state === 'land') {
+          p.state = 'idle';
+          p.animationFrame = 0;
+          p.animationTime = 0;
+        }
+      }
+    }
+    
+    // Handle attack (can attack in air, but not during landing)
+    if (input.attack && p.attackCooldown <= 0 && !p.isAttacking && p.landingTime <= 0) {
       p.isAttacking = true;
+      p.wasInAir = !p.onGround; // Track if attack started in air
       p.state = 'attack';
       p.animationFrame = 0;
       p.animationTime = 0;
       p.attackCooldown = 0.5;
+      // STOP MOVEMENT only when attacking on ground (keep air momentum)
+      if (p.onGround) {
+        p.vx = 0;
+      }
       checkAttackHits(p);
     }
     
@@ -177,15 +288,40 @@ function updateGame(dt) {
       p.animationFrame++;
       
       // Check if attack animation finished
-      if (p.state === 'attack') {
+      if (p.state === 'attack' && p.isAttacking) {
         const maxFrames = animData?.frames || 16;
         if (p.animationFrame >= maxFrames) {
+          // Attack finished
           p.isAttacking = false;
-          p.state = 'idle';
           p.animationFrame = 0;
+          p.animationTime = 0;
+          
+          // Determine next state based on current situation
+          if (!p.onGround) {
+            p.state = 'air';
+          } else if (p.landingTime > 0) {
+            p.state = 'land';
+          } else {
+            p.state = 'idle';
+          }
         } else {
           checkAttackHits(p);
         }
+      }
+      
+      // Failsafe: If attack is stuck, force reset after 1 second
+      if (p.isAttacking && p.state === 'attack') {
+        if (!p.attackStuckTimer) p.attackStuckTimer = 0;
+        p.attackStuckTimer += dt;
+        if (p.attackStuckTimer > 1.0) {
+          console.log(`Force resetting stuck attack for player ${p.id}`);
+          p.isAttacking = false;
+          p.attackStuckTimer = 0;
+          p.state = p.onGround ? 'idle' : 'air';
+          p.animationFrame = 0;
+        }
+      } else {
+        p.attackStuckTimer = 0;
       }
     }
     
@@ -202,35 +338,104 @@ function updateGame(dt) {
       p.y = GROUND_Y;
       p.vy = 0;
       p.onGround = true;
+      
+      // Reset jump flag and handle landing whenever touching ground
+      if (!wasOnGround) {
+        p.isJumping = false;
+        
+        // Trigger landing animation if just landed and not attacking
+        if (!p.isAttacking) {
+          p.state = 'land';
+          p.animationFrame = 0;
+          p.animationTime = 0;
+          p.landingTime = 0.1; // Very short landing (0.1 seconds)
+        } else {
+          // If attacking while landing, let attack finish but reset landing
+          p.landingTime = 0;
+        }
+      }
     } else {
       p.onGround = false;
     }
     
-    // Movement
-    if (!p.isAttacking) {
+    // Movement and state management
+    if (p.hp > 0) {
       let moving = false;
       
-      if (input.left) {
-        p.vx = -p.speed;
-        p.facingRight = false;
-        moving = true;
-      } else if (input.right) {
-        p.vx = p.speed;
-        p.facingRight = true;
-        moving = true;
+      // Handle movement (only if not attacking)
+      if (!p.isAttacking) {
+        if (input.left) {
+          p.vx = -p.speed;
+          p.facingRight = false;
+          moving = true;
+          // Cancel landing if moving
+          if (p.landingTime > 0) {
+            p.landingTime = 0;
+          }
+        } else if (input.right) {
+          p.vx = p.speed;
+          p.facingRight = true;
+          moving = true;
+          // Cancel landing if moving
+          if (p.landingTime > 0) {
+            p.landingTime = 0;
+          }
+        } else {
+          p.vx *= 0.8;
+          if (Math.abs(p.vx) < 1) p.vx = 0;
+        }
+        
+        // Set state based on ground and movement (only if not attacking)
+        if (!p.onGround) {
+          p.state = 'air';
+        } else if (p.landingTime <= 0) {
+          // Change to walk/idle if not landing
+          p.state = moving ? 'walk' : 'idle';
+        }
       } else {
-        p.vx *= 0.8;
-        if (Math.abs(p.vx) < 1) p.vx = 0;
+        // KEEP VELOCITY AT 0 while attacking ON GROUND (allow air momentum!)
+        if (p.onGround) {
+          p.vx = 0;
+        }
+        // In air: keep momentum (vx stays as is)
       }
       
-      p.state = moving ? 'walk' : 'idle';
       p.x += p.vx * dt;
-      p.x = Math.max(50, Math.min(750, p.x));
+      p.x = Math.max(50, Math.min(1550, p.x)); // Wider world bounds
+    }
+    
+    // Failsafe: If stuck in air state while on ground for too long, force reset
+    if (p.state === 'air' && p.onGround) {
+      if (!p.airStuckTimer) p.airStuckTimer = 0;
+      p.airStuckTimer += dt;
+      if (p.airStuckTimer > 0.5) {
+        console.log(`Force resetting stuck air state for player ${p.id}`);
+        p.state = 'idle';
+        p.animationFrame = 0;
+        p.isJumping = false;
+        p.isAttacking = false;
+        p.landingTime = 0;
+        p.airStuckTimer = 0;
+      }
+    } else {
+      p.airStuckTimer = 0;
+    }
+    
+    // Stop dead players from doing anything
+    if (p.hp <= 0) {
+      p.vx = 0;
+      p.isAttacking = false;
+      p.state = 'idle';
+      p.isJumping = false;
+      p.landingTime = 0;
     }
   }
 }
 
 function checkAttackHits(attacker) {
+  // Dead players cannot attack
+  if (attacker.hp <= 0) return;
+  
   const animData = hitboxData[attacker.character]?.animations?.attack;
   if (!animData || !animData.attackHitboxes) return;
   
@@ -243,8 +448,8 @@ function checkAttackHits(attacker) {
     if (targetId === attacker.id) continue;
     const target = players[targetId];
     
-    // Skip dead players
-    if (target.hp <= 0) continue;
+    // Skip dead or invincible players
+    if (target.hp <= 0 || target.invincible) continue;
     
     const targetBodyHitbox = hitboxData[target.character]?.animations?.[target.state]?.bodyHitbox;
     if (!targetBodyHitbox) continue;
@@ -289,17 +494,24 @@ function checkAttackHits(attacker) {
         
         if (target.hp <= 0) {
           target.hp = 0;
+          target.alive = false; // Mark as dead (hide from game)
+          target.vx = 0;
+          target.vy = 0;
+          attacker.kills++; // Increment kill count
           io.emit('playerDied', { id: target.id, killer: attacker.id });
           setTimeout(() => {
             if (players[target.id]) {
               target.hp = target.maxHp;
-              target.x = 200 + Math.random() * 400;
-              target.y = 450; // Respawn at ground level
+              target.x = 400 + Math.random() * 800;
+              target.y = 200; // SPAWN IN AIR to fall down
               target.vx = 0;
               target.vy = 0;
-              target.onGround = true;
-              target.state = 'idle';
+              target.onGround = false; // Start in air
+              target.state = 'air';
               target.isAttacking = false;
+              target.invincible = true; // SPAWN INVINCIBILITY
+              target.invincibleTime = 2.0; // 2 seconds
+              target.alive = true; // NOW ALIVE - show in game
               io.emit('playerRespawned', { id: target.id });
             }
           }, 3000);
@@ -322,9 +534,13 @@ function snapshot() {
       facingRight: p.facingRight,
       hp: p.hp,
       maxHp: p.maxHp,
+      kills: p.kills,
       state: p.state,
       animationFrame: p.animationFrame,
-      lastInputSeq: p.lastInputSeq
+      lastInputSeq: p.lastInputSeq,
+      invincible: p.invincible, // SEND INVINCIBILITY STATE
+      invincibleTime: p.invincibleTime, // SEND TIMER
+      alive: p.alive // SEND ALIVE STATE
     }))
   };
 }
@@ -347,10 +563,6 @@ server.listen(PORT, '0.0.0.0', async () => {
   } else {
     console.log(`🏰 Local: http://localhost:${PORT}`);
     console.log(`🏰 Network (WiFi): http://${localIP}:${PORT}`);
-    console.log('\n🌐 For Internet Play:');
-    console.log('   1. Download ngrok: https://ngrok.com/download');
-    console.log('   2. Run: ngrok http 3000');
-    console.log('   3. Share the https URL it gives you!');
   }
   
   console.log('======================================\n');

@@ -178,9 +178,31 @@
           "height": 246
         },
         "attackHitboxes": []
+      },
+      "land": {
+        "frames": 1,
+        "frameTime": 0.1,
+        "bodyHitbox": {
+          "x": -58.3046875,
+          "y": -113.12109375,
+          "width": 117,
+          "height": 232
+        },
+        "attackHitboxes": []
+      },
+      "air": {
+        "frames": 1,
+        "frameTime": 0.1,
+        "bodyHitbox": {
+          "x": -63.3046875,
+          "y": -155.12109375,
+          "width": 138,
+          "height": 261
+        },
+        "attackHitboxes": []
       }
     },
-    "spriteScale": 1,
+    "spriteScale": 1.4,
     "gameScale": 0.3,
     "flipped": false
   },
@@ -195,7 +217,8 @@
           "width": 144.66666666666666,
           "height": 232.66666666666666
         },
-        "attackHitboxes": []
+        "attackHitboxes": [],
+        "frameTime": 0.05
       },
       "powerup": {
         "frames": 16,
@@ -328,7 +351,8 @@
             "width": 261,
             "height": 92
           }
-        ]
+        ],
+        "frameTime": 0.05
       },
       "walk": {
         "frames": 16,
@@ -337,6 +361,29 @@
           "y": -114.5,
           "width": 148,
           "height": 231
+        },
+        "attackHitboxes": [],
+        "frameTime": 0.05
+      },
+      "air": {
+        "frames": 1,
+        "frameTime": 0.1,
+        "bodyHitbox": {
+          "x": -131.89453125,
+          "y": -115.876953125,
+          "width": 188,
+          "height": 234
+        },
+        "attackHitboxes": []
+      },
+      "land": {
+        "frames": 1,
+        "frameTime": 0.1,
+        "bodyHitbox": {
+          "x": -108.89453125,
+          "y": -37.876953125,
+          "width": 155,
+          "height": 206
         },
         "attackHitboxes": []
       }

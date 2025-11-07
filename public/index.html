@@ -16,6 +16,14 @@
       overflow: hidden;
     }
     
+    /* Pixelated/crisp rendering for canvas */
+    canvas {
+      image-rendering: -moz-crisp-edges;
+      image-rendering: -webkit-crisp-edges;
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
+    }
+    
     #character-select {
       position: fixed;
       inset: 0;
@@ -145,6 +153,30 @@
       transform: none;
     }
     
+    #start-btn.loading {
+      opacity: 1;
+      background: linear-gradient(135deg, #8b4513 0%, #a0522d 100%);
+      cursor: wait;
+      position: relative;
+    }
+    
+    .loading-spinner {
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      border: 2px solid #daa520;
+      border-top: 2px solid transparent;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin-right: 10px;
+      vertical-align: middle;
+    }
+    
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    
     #game-container {
       display: none;
       width: 100vw;
@@ -220,6 +252,311 @@
       color: #f4a460;
       margin-top: 20px;
     }
+    
+    /* Leaderboard */
+    #leaderboard {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      background: rgba(61,40,23,0.95);
+      padding: 15px;
+      border-radius: 5px;
+      border: 2px solid #8b4513;
+      min-width: 200px;
+      max-height: 300px;
+      overflow-y: hidden; /* No scroll */
+      backdrop-filter: blur(10px);
+      box-shadow: inset 0 0 15px rgba(139,69,19,0.4);
+      z-index: 100;
+    }
+    
+    #leaderboard h3 {
+      font-family: 'Cinzel', serif;
+      color: #daa520;
+      margin-bottom: 10px;
+      font-size: 18px;
+      text-align: center;
+    }
+    
+    .leaderboard-entry {
+      padding: 5px;
+      margin: 3px 0;
+      background: rgba(26,15,10,0.5);
+      border-radius: 3px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    
+    .leaderboard-entry.me {
+      background: rgba(218,165,32,0.3);
+      border: 1px solid #daa520;
+    }
+    
+    .leaderboard-rank {
+      font-weight: bold;
+      color: #daa520;
+      margin-right: 8px;
+    }
+    
+    .leaderboard-name {
+      flex: 1;
+      color: #f4e4c1;
+    }
+    
+    .leaderboard-kills {
+      color: #dc143c;
+      font-weight: bold;
+    }
+    
+    /* Chat */
+    #chat-container {
+      position: fixed;
+      bottom: 20px;
+      left: 20px;
+      width: 350px;
+      background: rgba(61,40,23,0.95);
+      border-radius: 5px;
+      border: 2px solid #8b4513;
+      backdrop-filter: blur(10px);
+      box-shadow: inset 0 0 15px rgba(139,69,19,0.4);
+      z-index: 100;
+      display: flex;
+      flex-direction: column;
+    }
+    
+    #chat-messages {
+      height: 200px;
+      overflow-y: hidden; /* No scroll */
+      padding: 10px;
+      font-size: 18px;
+    }
+    
+    .chat-message {
+      margin-bottom: 8px;
+      word-wrap: break-word;
+    }
+    
+    .chat-message .chat-name {
+      color: #daa520;
+      font-weight: bold;
+      font-size: 18px;
+    }
+    
+    .chat-message .chat-text {
+      color: #f4e4c1;
+      font-size: 18px;
+    }
+    
+    .chat-system {
+      color: #8b8b8b;
+      font-style: italic;
+    }
+    
+    #chat-input-container {
+      display: flex;
+      padding: 10px;
+      border-top: 1px solid #8b4513;
+    }
+    
+    #chat-input {
+      flex: 1;
+      background: rgba(26,15,10,0.7);
+      border: 2px solid #8b4513;
+      border-radius: 3px;
+      color: #f4e4c1;
+      padding: 8px;
+      font-family: 'MedievalSharp', serif;
+      font-size: 13px;
+      outline: none;
+    }
+    
+    #chat-input:focus {
+      border-color: #daa520;
+    }
+    
+    #chat-send {
+      margin-left: 5px;
+      background: #daa520;
+      border: 2px solid #8b4513;
+      border-radius: 3px;
+      padding: 8px 15px;
+      color: #1a0f0a;
+      font-family: 'Cinzel', serif;
+      font-weight: bold;
+      cursor: pointer;
+      pointer-events: all;
+    }
+    
+    #chat-send:hover {
+      background: #cd7f32;
+    }
+    
+    /* Dev Mode */
+    #dev-mode-btn {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background: rgba(61,40,23,0.9);
+      border: 2px solid #8b4513;
+      border-radius: 5px;
+      padding: 10px 20px;
+      color: #daa520;
+      font-family: 'MedievalSharp', serif;
+      font-size: 12px;
+      cursor: pointer;
+      pointer-events: all;
+      z-index: 150;
+      transition: all 0.3s;
+    }
+    
+    #dev-mode-btn:hover {
+      background: rgba(61,40,23,1);
+      border-color: #daa520;
+      transform: translateY(-2px);
+    }
+    
+    #dev-panel {
+      display: none;
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 90%;
+      max-width: 1200px;
+      height: 80%;
+      background: rgba(26,15,10,0.98);
+      border: 3px solid #daa520;
+      border-radius: 10px;
+      z-index: 200;
+      box-shadow: 0 0 50px rgba(0,0,0,0.9);
+      flex-direction: column;
+    }
+    
+    #dev-panel.active {
+      display: flex;
+    }
+    
+    #dev-header {
+      background: rgba(61,40,23,0.9);
+      padding: 15px 20px;
+      border-bottom: 2px solid #8b4513;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    
+    #dev-header h2 {
+      margin: 0;
+      color: #daa520;
+      font-family: 'Cinzel', serif;
+      font-size: 20px;
+    }
+    
+    #dev-close {
+      background: #dc143c;
+      border: 2px solid #8b0000;
+      border-radius: 3px;
+      padding: 5px 15px;
+      color: #fff;
+      font-family: 'MedievalSharp', serif;
+      cursor: pointer;
+      pointer-events: all;
+    }
+    
+    #dev-close:hover {
+      background: #b00000;
+    }
+    
+    #dev-content {
+      flex: 1;
+      padding: 20px;
+      overflow-y: auto;
+      color: #f4e4c1;
+    }
+    
+    #dev-sidebar {
+      background: rgba(61,40,23,0.5);
+      padding: 15px;
+      border-right: 2px solid #8b4513;
+      min-width: 250px;
+    }
+    
+    #dev-main {
+      flex: 1;
+      padding: 20px;
+      overflow-y: auto;
+    }
+    
+    .dev-section {
+      background: rgba(61,40,23,0.3);
+      border: 2px solid #8b4513;
+      border-radius: 5px;
+      padding: 15px;
+      margin-bottom: 15px;
+    }
+    
+    .dev-section h3 {
+      color: #daa520;
+      font-family: 'Cinzel', serif;
+      margin-top: 0;
+      margin-bottom: 10px;
+      font-size: 16px;
+    }
+    
+    .dev-control {
+      margin-bottom: 10px;
+    }
+    
+    .dev-control label {
+      display: block;
+      color: #f4e4c1;
+      font-family: 'MedievalSharp', serif;
+      font-size: 13px;
+      margin-bottom: 5px;
+    }
+    
+    .dev-control select,
+    .dev-control input[type="range"] {
+      width: 100%;
+      background: rgba(26,15,10,0.7);
+      border: 2px solid #8b4513;
+      border-radius: 3px;
+      color: #f4e4c1;
+      padding: 5px;
+      font-family: 'MedievalSharp', serif;
+    }
+    
+    .dev-control button {
+      background: #daa520;
+      border: 2px solid #8b4513;
+      border-radius: 3px;
+      padding: 8px 15px;
+      color: #1a0f0a;
+      font-family: 'MedievalSharp', serif;
+      font-weight: bold;
+      cursor: pointer;
+      margin-right: 5px;
+      margin-top: 5px;
+    }
+    
+    .dev-control button:hover {
+      background: #cd7f32;
+    }
+    
+    #dev-canvas {
+      background: #1a1a1a;
+      border: 2px solid #8b4513;
+      border-radius: 5px;
+      display: block;
+      margin: 10px auto;
+    }
+    
+    .dev-info {
+      font-size: 12px;
+      color: #8b8b8b;
+      margin-top: 5px;
+    }
   </style>
 </head>
 <body>
@@ -232,13 +569,13 @@
       <div class="character-grid">
         <div class="character-card" data-character="spartan">
           <div class="character-preview">🛡️</div>
-          <h3>KNIGHT</h3>
+          <h3>SPARTAN</h3>
           <p>Armored defender with shield</p>
         </div>
         
         <div class="character-card" data-character="warrior">
           <div class="character-preview">⚔️</div>
-          <h3>BERSERKER</h3>
+          <h3>WARRIOR</h3>
           <p>Fierce warrior with mighty blade</p>
         </div>
       </div>
@@ -268,17 +605,119 @@
       
       <div class="hud-panel">
         <div id="player-count">Players: 1</div>
-        <div id="fps">FPS: 60</div>
-        <div id="hitbox-indicator" style="display: none; color: #4ade80; font-weight: 700; margin-top: 5px;">
-          🎯 Hitboxes: ON (Press H)
-        </div>
-        <button id="reload-hitboxes" style="margin-top: 10px; padding: 5px 10px; background: #daa520; border: 2px solid #8b4513; border-radius: 5px; cursor: pointer; font-weight: 700; color: #1a0f0a; pointer-events: all; font-family: 'MedievalSharp', serif;">
-          🔄 Reload Hitboxes
-        </button>
+      </div>
+    </div>
+    
+    <!-- Leaderboard -->
+    <div id="leaderboard">
+      <h3>🏆 LEADERBOARD 🏆</h3>
+      <div id="leaderboard-list"></div>
+    </div>
+    
+    <!-- Chat -->
+    <div id="chat-container">
+      <div id="chat-messages"></div>
+      <div id="chat-input-container">
+        <input type="text" id="chat-input" placeholder="Press Enter to chat..." maxlength="200" />
+        <button id="chat-send">Send</button>
       </div>
     </div>
     
     <canvas id="game-canvas"></canvas>
+    
+    <!-- Dev Mode Button -->
+    <button id="dev-mode-btn">🔧 Enter Dev Mode</button>
+  </div>
+  
+  <!-- Dev Panel -->
+  <div id="dev-panel">
+    <div id="dev-header">
+      <h2>⚙️ Developer Tools - Hitbox Editor</h2>
+      <button id="dev-close">Close</button>
+    </div>
+    <div id="dev-content" style="display: flex;">
+      <div id="dev-sidebar">
+        <div class="dev-section">
+          <h3>Character & Animation</h3>
+          <div class="dev-control">
+            <label>Character:</label>
+            <select id="dev-character-select">
+              <option value="spartan">Spartan</option>
+              <option value="warrior">Warrior</option>
+            </select>
+          </div>
+          <div class="dev-control">
+            <label>Animation:</label>
+            <select id="dev-animation-select">
+              <option value="idle">Idle</option>
+              <option value="walk">Walk</option>
+              <option value="attack">Attack</option>
+              <option value="air">Air (Jump)</option>
+              <option value="land">Land</option>
+            </select>
+          </div>
+        </div>
+        
+        <div class="dev-section">
+          <h3>Frame Control</h3>
+          <div class="dev-control">
+            <label id="dev-frame-display">Frame: 1 / 1</label>
+            <button id="dev-prev-frame">← Previous</button>
+            <button id="dev-next-frame">Next →</button>
+          </div>
+          <div class="dev-control">
+            <label>
+              <input type="checkbox" id="dev-flip-sprite" /> Flip Sprite
+            </label>
+            <div class="dev-info">Facing: <span id="dev-facing-info">Left</span></div>
+          </div>
+        </div>
+        
+        <div class="dev-section">
+          <h3>Sprite Settings</h3>
+          <div class="dev-control">
+            <label>Scale: <span id="dev-scale-value">3x</span></label>
+            <input type="range" id="dev-sprite-scale" min="1" max="6" step="0.1" value="3" />
+          </div>
+          <div class="dev-control">
+            <label>Frame Time: <span id="dev-frame-time-value">0.10s</span></label>
+            <input type="range" id="dev-frame-time" min="0.05" max="0.5" step="0.01" value="0.1" />
+          </div>
+        </div>
+        
+        <div class="dev-section">
+          <h3>Hitbox Tools</h3>
+          <div class="dev-control">
+            <button id="dev-tool-body" style="background: #22c55e;">Body Hitbox</button>
+            <button id="dev-tool-attack">Attack Hitbox</button>
+          </div>
+          <div class="dev-control" id="dev-attack-controls" style="display: none;">
+            <button id="dev-add-attack">+ Add Attack Hitbox</button>
+            <div id="dev-attack-list"></div>
+          </div>
+        </div>
+        
+        <div class="dev-section">
+          <h3>Save/Load</h3>
+          <div class="dev-control">
+            <button id="dev-save-btn" style="background: #22c55e;">💾 Save Hitboxes</button>
+            <button id="dev-reset-btn" style="background: #ef4444;">🔄 Reset All</button>
+          </div>
+          <div id="dev-save-status" class="dev-info" style="background: #333; padding: 5px; border-radius: 3px; margin-top: 5px;">Ready</div>
+        </div>
+      </div>
+      
+      <div id="dev-main">
+        <div class="dev-section">
+          <h3>Canvas (Draw hitboxes by clicking and dragging)</h3>
+          <canvas id="dev-canvas" width="800" height="600"></canvas>
+          <div class="dev-info" style="margin-top: 10px;">
+            <strong>Body Hitbox:</strong> X: <span id="dev-body-x">-</span>, Y: <span id="dev-body-y">-</span>, 
+            W: <span id="dev-body-w">-</span>, H: <span id="dev-body-h">-</span>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
   
   <script src="/socket.io/socket.io.js"></script>
