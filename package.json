@@ -1,0 +1,24 @@
+{
+  "name": "medieval-battle-arena",
+  "version": "1.0.0",
+  "description": "Medieval themed multiplayer battle arena game with real-time combat",
+  "main": "server.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "keywords": ["game", "multiplayer", "medieval", "websocket", "socket.io"],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  },
+  "dependencies": {
+    "express": "^5.1.0",
+    "ngrok": "^5.0.0-beta.2",
+    "socket.io": "^4.8.1"
+  }
+}
