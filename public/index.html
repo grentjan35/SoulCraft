@@ -222,26 +222,29 @@
       position: fixed;
       inset: 0;
       display: none;
-      align-items: center;
+      pointer-events: none;
+      align-items: flex-start;
       justify-content: center;
-      background: rgba(26,15,10,0.95);
+      padding-top: 15vh;
+      background: rgba(0,0,0,0.6);
       z-index: 999;
-      backdrop-filter: blur(10px);
     }
     
     #death-panel {
-      background: linear-gradient(145deg, rgba(61,40,23,0.95), rgba(26,15,10,0.95));
-      padding: 50px;
-      border-radius: 10px;
-      border: 4px solid #8b0000;
+      background: linear-gradient(145deg, rgba(61,40,23,0.9), rgba(26,15,10,0.9));
+      padding: 25px 35px;
+      pointer-events: all;
+      border-radius: 8px;
+      border: 3px solid #8b0000;
       text-align: center;
-      box-shadow: 0 0 50px rgba(139,0,0,0.7), inset 0 0 30px rgba(139,0,0,0.3);
+      box-shadow: 0 0 30px rgba(139,0,0,0.7), inset 0 0 20px rgba(139,0,0,0.3);
     }
     
     #death-panel h2 {
       font-family: 'Cinzel', serif;
-      font-size: 56px;
+      font-size: 32px;
       color: #dc143c;
+      margin: 0 0 10px 0;
       margin-bottom: 20px;
       text-shadow: 0 0 20px rgba(220,20,60,0.9);
     }
@@ -323,11 +326,33 @@
       z-index: 100;
       display: flex;
       flex-direction: column;
+      transition: all 0.3s ease;
+    }
+    
+    #chat-container.collapsed {
+      height: 40px;
+      overflow: hidden;
+    }
+    
+    #chat-toggle {
+      background: rgba(139,69,19,0.8);
+      color: #daa520;
+      border: none;
+      padding: 5px 10px;
+      cursor: pointer;
+      font-family: 'MedievalSharp', serif;
+      font-size: 14px;
+      border-radius: 3px;
+      margin: 5px;
+    }
+    
+    #chat-toggle:hover {
+      background: rgba(139,69,19,1);
     }
     
     #chat-messages {
       height: 200px;
-      overflow-y: hidden; /* No scroll */
+      overflow-y: auto; /* Allow scroll for messages */
       padding: 10px;
       font-size: 18px;
     }
@@ -348,13 +373,25 @@
       font-size: 18px;
     }
     
+    .kill-message {
+      margin-bottom: 8px;
+      font-size: 16px;
+      font-weight: bold;
+      animation: fadeIn 0.3s ease;
+    }
+    
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(-10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    
     .chat-system {
       color: #8b8b8b;
       font-style: italic;
     }
     
     #chat-input-container {
-      display: flex;
+      display: flex; /* Always visible */
       padding: 10px;
       border-top: 1px solid #8b4513;
     }
@@ -506,14 +543,26 @@
     
     .dev-control {
       margin-bottom: 10px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 5px;
     }
     
     .dev-control label {
-      display: block;
       color: #f4e4c1;
       font-family: 'MedievalSharp', serif;
-      font-size: 13px;
-      margin-bottom: 5px;
+      font-size: 14px;
+      min-width: 80px;
+    }
+    
+    .dev-control input[type="number"] {
+      background: rgba(26,15,10,0.7);
+      border: 2px solid #8b4513;
+      border-radius: 3px;
+      color: #f4e4c1;
+      padding: 5px;
+      font-family: 'MedievalSharp', serif;
     }
     
     .dev-control select,
@@ -566,17 +615,13 @@
       <h1>⚔️ MEDIEVAL BATTLE ARENA ⚔️</h1>
       <input id="name-input" type="text" placeholder="Enter thy warrior name" maxlength="20" autofocus />
       
-      <div class="character-grid">
-        <div class="character-card" data-character="spartan">
-          <div class="character-preview">🛡️</div>
-          <h3>SPARTAN</h3>
-          <p>Armored defender with shield</p>
-        </div>
-        
-        <div class="character-card" data-character="warrior">
-          <div class="character-preview">⚔️</div>
-          <h3>WARRIOR</h3>
-          <p>Fierce warrior with mighty blade</p>
+      <div class="character-grid" style="grid-template-columns: 1fr; max-width: 400px; margin: 0 auto;">
+        <div class="character-card" data-character="knight">
+          <div class="character-preview">
+            <img src="assets/player sprites/knight/idle/idle_r00_c00.png" style="width: 100px; height: 100px; object-fit: contain; image-rendering: pixelated;" alt="Knight">
+          </div>
+          <h3>KNIGHT</h3>
+          <p>Noble warrior with sword and shield</p>
         </div>
       </div>
       
@@ -587,9 +632,21 @@
   <!-- Death Screen -->
   <div id="death-screen">
     <div id="death-panel">
-      <h2>☠️ SLAIN IN BATTLE ☠️</h2>
-      <p style="font-size: 20px; color: #f4a460; font-family: 'MedievalSharp', serif;">Felled by <span id="killer-name">Unknown</span></p>
-      <div id="respawn-timer">Respawning in 3...</div>
+      <h2>☠️ SLAIN ☠️</h2>
+      <p style="font-size: 16px; color: #f4a460; font-family: 'MedievalSharp', serif; margin: 5px 0;">by <span id="killer-name">Unknown</span></p>
+      <div id="respawn-timer" style="font-size: 14px; color: #daa520; margin: 12px 0;">Respawn in <span id="respawn-countdown">5</span>s</div>
+      <button id="respawn-btn" style="
+        padding: 10px 30px;
+        font-size: 18px;
+        font-family: 'Cinzel', serif;
+        background: linear-gradient(145deg, #8b0000, #dc143c);
+        color: #f4e4c1;
+        border: 3px solid #daa520;
+        border-radius: 5px;
+        cursor: not-allowed;
+        opacity: 0.5;
+        transition: all 0.3s;
+      " disabled>RESPAWN</button>
     </div>
   </div>
   
@@ -616,6 +673,7 @@
     
     <!-- Chat -->
     <div id="chat-container">
+      <button id="chat-toggle">▼ Chat</button>
       <div id="chat-messages"></div>
       <div id="chat-input-container">
         <input type="text" id="chat-input" placeholder="Press Enter to chat..." maxlength="200" />
@@ -642,16 +700,18 @@
           <div class="dev-control">
             <label>Character:</label>
             <select id="dev-character-select">
-              <option value="spartan">Spartan</option>
-              <option value="warrior">Warrior</option>
+              <option value="knight">Knight</option>
             </select>
           </div>
           <div class="dev-control">
             <label>Animation:</label>
             <select id="dev-animation-select">
               <option value="idle">Idle</option>
-              <option value="walk">Walk</option>
+              <option value="walk">Walk (Run)</option>
               <option value="attack">Attack</option>
+              <option value="shield">Shield</option>
+              <option value="death_front">Death (Front)</option>
+              <option value="death_behind">Death (Behind)</option>
               <option value="air">Air (Jump)</option>
               <option value="land">Land</option>
             </select>
@@ -671,39 +731,77 @@
             </label>
             <div class="dev-info">Facing: <span id="dev-facing-info">Left</span></div>
           </div>
+          <div class="dev-control">
+            <button id="dev-set-shield-frame" style="background: #3b82f6;">🛡️ Set as Shield Frame</button>
+            <div class="dev-info" style="font-size: 11px; color: #888; margin-top: 5px;">Current frame will freeze when holding S</div>
+          </div>
         </div>
         
         <div class="dev-section">
           <h3>Sprite Settings</h3>
           <div class="dev-control">
-            <label>Scale: <span id="dev-scale-value">3x</span></label>
-            <input type="range" id="dev-sprite-scale" min="1" max="6" step="0.1" value="3" />
+            <label>Game Size:</label>
+            <input type="range" id="dev-sprite-scale" min="0.1" max="5" step="0.1" value="1.0" style="flex: 1;" />
+            <input type="number" id="dev-scale-input" min="0.1" max="5" step="0.1" value="1.0" style="width: 70px; margin-left: 10px;" />
+            <div class="dev-info" style="font-size: 11px; color: #888; width: 100%; margin-top: 5px;">Actual size in game (0.1 = tiny, 5 = huge)</div>
           </div>
           <div class="dev-control">
-            <label>Frame Time: <span id="dev-frame-time-value">0.10s</span></label>
-            <input type="range" id="dev-frame-time" min="0.05" max="0.5" step="0.01" value="0.1" />
+            <label>Speed:</label>
+            <input type="range" id="dev-speed-slider" min="0" max="10" step="0.5" value="5" style="flex: 1;" />
+            <input type="number" id="dev-speed-input" min="0" max="10" step="0.5" value="5" style="width: 70px; margin-left: 10px;" />
+            <div class="dev-info" style="font-size: 11px; color: #888; width: 100%; margin-top: 5px;">0 = No speed, 10 = Super fast</div>
+          </div>
+          <div class="dev-control">
+            <label>Frame Time:</label>
+            <input type="range" id="dev-frame-time" min="0.05" max="0.5" step="0.01" value="0.1" style="flex: 1;" />
+            <input type="number" id="dev-frame-time-input" min="0.05" max="0.5" step="0.01" value="0.1" style="width: 70px; margin-left: 10px;" />
           </div>
         </div>
         
         <div class="dev-section">
           <h3>Hitbox Tools</h3>
           <div class="dev-control">
+            <label style="margin-right: 10px;">
+              <input type="radio" name="hitbox-scope" id="dev-scope-single" checked /> Single Frame
+            </label>
+            <label>
+              <input type="radio" name="hitbox-scope" id="dev-scope-all" /> All Frames
+            </label>
+          </div>
+          <div class="dev-control">
             <button id="dev-tool-body" style="background: #22c55e;">Body Hitbox</button>
             <button id="dev-tool-attack">Attack Hitbox</button>
+            <button id="dev-tool-shield">Shield Hitbox</button>
+          </div>
+          <div class="dev-info" style="font-size: 11px; color: #888; margin-top: 5px;">
+            Left-click drag: Create | Right-click: Delete
           </div>
           <div class="dev-control" id="dev-attack-controls" style="display: none;">
             <button id="dev-add-attack">+ Add Attack Hitbox</button>
             <div id="dev-attack-list"></div>
           </div>
+          <div class="dev-control" id="dev-shield-controls" style="display: none;">
+            <button id="dev-add-shield">+ Add Shield Hitbox</button>
+            <div id="dev-shield-list"></div>
+          </div>
+        </div>
+        
+        <div class="dev-section">
+          <h3>Frame Sounds</h3>
+          <div class="dev-control">
+            <button id="dev-add-sound" style="background: #3b82f6;">🔊 Add Sound to Frame</button>
+          </div>
+          <div id="dev-sound-list" style="margin-top: 10px; max-height: 200px; overflow-y: auto;"></div>
         </div>
         
         <div class="dev-section">
           <h3>Save/Load</h3>
           <div class="dev-control">
-            <button id="dev-save-btn" style="background: #22c55e;">💾 Save Hitboxes</button>
+            <button id="dev-save-btn" style="background: #22c55e;">💾 Save</button>
             <button id="dev-reset-btn" style="background: #ef4444;">🔄 Reset All</button>
           </div>
           <div id="dev-save-status" class="dev-info" style="background: #333; padding: 5px; border-radius: 3px; margin-top: 5px;">Ready</div>
+          <div class="dev-info" style="font-size: 11px; color: #888; margin-top: 5px;">Saves hitboxes, size, speed, and all settings</div>
         </div>
       </div>
       

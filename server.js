@@ -63,9 +63,21 @@ app.post('/api/save-hitboxes', (req, res) => {
       console.warn('⚠️  Could not save hitboxes to file (read-only filesystem), keeping in memory');
     }
     
-    console.log('✓ Hitboxes reloaded successfully!');
-    console.log('  - Spartan attack hitboxes:', hitboxData.spartan?.animations?.attack?.attackHitboxes?.length || 0);
-    console.log('  - Warrior attack hitboxes:', hitboxData.warrior?.animations?.attack?.attackHitboxes?.length || 0);
+    // UPDATE ALL EXISTING PLAYERS with new speed and size
+    for (const id in players) {
+      const p = players[id];
+      const charData = hitboxData[p.character];
+      if (charData) {
+        p.speed = charData.speed || 200;
+        console.log(`Updated ${p.name} (${p.character}) speed to ${p.speed}`);
+      }
+    }
+    
+    console.log('✓ Changes applied successfully!');
+    console.log('  - Spartan speed:', hitboxData.spartan?.speed || 200);
+    console.log('  - Warrior speed:', hitboxData.warrior?.speed || 200);
+    console.log('  - Spartan size:', hitboxData.spartan?.gameScale || 1.0);
+    console.log('  - Warrior size:', hitboxData.warrior?.gameScale || 1.0);
     res.json({ success: true });
   } catch (error) {
     console.error('Error saving hitboxes:', error);
@@ -79,16 +91,19 @@ app.get('/api/hitboxes', (req, res) => {
 });
 
 function createPlayer(id, name = 'Player', character = 'spartan') {
-  const spawnX = 400 + Math.random() * 800;
+  // Spawn near center of massive world
+  const spawnX = 4500 + Math.random() * 1000;
+  // Get speed from hitbox data (default 200 if not set)
+  const characterSpeed = hitboxData[character]?.speed || 200;
   return {
     id,
     name,
     character,
     x: spawnX,
-    y: 200, // SPAWN IN AIR to fall down
+    y: 4700, // SPAWN IN AIR to fall down (near world center)
     vx: 0,
     vy: 0,
-    speed: 200,
+    speed: characterSpeed,
     facingRight: true,
     onGround: false, // Start in air
     hp: 100,
@@ -102,13 +117,25 @@ function createPlayer(id, name = 'Player', character = 'spartan') {
     attackStuckTimer: 0,
     airStuckTimer: 0,
     landingTime: 0,
+    isShielding: false,
+    shieldFrame: 0, // The frame to freeze on while shielding
+    shieldReleasing: false, // Playing remaining shield animation
+    shieldStuckTimer: 0,
+    wantsToShield: false, // Flag to shield on landing
+    isShieldSlamming: false, // Flag for shield slam attack
     isJumping: false,
     hasDoubleJump: false,
     jumpPressed: false,
     lastInputSeq: 0,
     invincible: true, // SPAWN INVINCIBILITY
     invincibleTime: 2.0, // 2 seconds
-    alive: true // Track if player is alive
+    alive: true, // Track if player is alive
+    // Combo system for extra jumps
+    lastDirection: 0, // -1 = left, 1 = right, 0 = none
+    directionChangeTime: 0,
+    comboJumps: 0, // Extra jumps earned from combos
+    maxComboJumps: 5, // Maximum extra jumps you can store
+    comboLevel: 0 // Tracks how many combos in a row (gets harder)
   };
 }
 
@@ -117,6 +144,12 @@ io.on('connection', (socket) => {
   socket.on('joinGame', (data) => {
     const { name, character } = data;
     players[socket.id] = createPlayer(socket.id, name, character);
+    
+    // Load shield frame from hitbox data
+    const shieldAnimData = hitboxData[character]?.animations?.shield;
+    if (shieldAnimData && shieldAnimData.shieldFrame !== undefined) {
+      players[socket.id].shieldFrame = shieldAnimData.shieldFrame;
+    }
     
     socket.emit('welcome', { 
       id: socket.id,
@@ -137,35 +170,81 @@ io.on('connection', (socket) => {
     p.lastInputSeq = data.seq;
     p._latestInput = data;
     
+    // Handle respawn request
+    if (data.respawn && p.isDying && p.canRespawn) {
+      p.hp = p.maxHp;
+      p.x = 4500 + Math.random() * 1000;
+      p.y = 4700;
+      p.vx = 0;
+      p.vy = 0;
+      p.onGround = false;
+      p.state = 'air';
+      p.isAttacking = false;
+      p.isDying = false;
+      p.isCorpse = false;
+      p.canRespawn = false;
+      p.invincible = true;
+      p.invincibleTime = 2.0;
+      
+      // RESET SHIELD STATE - FIX MOVEMENT BUG!
+      p.isShielding = false;
+      p.shieldReleasing = false;
+      p.wantsToShield = false;
+      p.isShieldSlamming = false;
+      p.shieldStuckTimer = 0;
+      
+      io.emit('playerRespawned', { id: socket.id });
+      return;
+    }
+    
     // Handle jump and double jump
     if (data.jump && !p.jumpPressed) {
       p.jumpPressed = true;
       
-      // First jump (on ground)
-      if (p.onGround && !p.isJumping) {
-        p.isJumping = true;
-        p.hasDoubleJump = true; // Enable double jump
-        p.vy = -400; // Jump velocity
-        p.onGround = false;
-        p.state = 'air';
-        p.animationFrame = 0;
-        p.animationTime = 0;
-        // Cancel attack if jumping
-        p.isAttacking = false;
-      }
-      // Double jump (in air) - WORKS EVEN WHILE ATTACKING
-      else if (!p.onGround && p.hasDoubleJump) {
-        p.vy = -400; // Double jump velocity
-        p.hasDoubleJump = false; // Can't triple jump
-        p.state = 'air';
-        p.animationFrame = 0;
-        p.animationTime = 0;
-        // Cancel attack when double jumping
-        p.isAttacking = false;
-        p.attackStuckTimer = 0;
-        
-        // Emit double jump event for motion blur effect
-        io.emit('playerDoubleJump', { id: p.id });
+      // Only allow jump if NOT shielding
+      if (!p.isShielding && !p.shieldReleasing) {
+        // First jump (on ground)
+        if (p.onGround && !p.isJumping) {
+          p.isJumping = true;
+          p.hasDoubleJump = true; // Enable double jump
+          p.vy = -400; // Jump velocity
+          p.onGround = false;
+          p.state = 'air';
+          p.animationFrame = 0;
+          p.animationTime = 0;
+          // Cancel attack if jumping
+          p.isAttacking = false;
+        }
+        // Double jump (in air) - WORKS EVEN WHILE ATTACKING
+        else if (!p.onGround && p.hasDoubleJump) {
+          p.vy = -400; // Double jump velocity
+          p.hasDoubleJump = false; // Use up standard double jump
+          p.state = 'air';
+          p.animationFrame = 0;
+          p.animationTime = 0;
+          // Cancel attack when double jumping
+          p.isAttacking = false;
+          p.attackStuckTimer = 0;
+          
+          // Emit double jump event for motion blur effect
+          io.emit('playerDoubleJump', { id: p.id });
+        }
+        // COMBO JUMPS - Extra jumps from rapid left/right spam!
+        else if (!p.onGround && p.comboJumps > 0) {
+          p.vy = -380; // Slightly weaker than normal jump
+          p.comboJumps--; // Use one combo jump
+          p.state = 'air';
+          p.animationFrame = 0;
+          p.animationTime = 0;
+          // Cancel attack
+          p.isAttacking = false;
+          p.attackStuckTimer = 0;
+          
+          console.log(`🚀 COMBO JUMP! ${p.name} has ${p.comboJumps} jumps left`);
+          
+          // Emit double jump event for motion blur effect
+          io.emit('playerDoubleJump', { id: p.id });
+        }
       }
     }
     
@@ -177,8 +256,58 @@ io.on('connection', (socket) => {
 
   socket.on('disconnect', () => {
     console.log('Player disconnected:', socket.id);
-    delete players[socket.id];
-    socket.broadcast.emit('playerLeft', { id: socket.id });
+    const player = players[socket.id];
+    
+    if (player && player.hp > 0) {
+      // Player was alive - trigger death animation
+      player.hp = 0;
+      
+      // Random death direction (front or back)
+      const deathType = Math.random() > 0.5 ? 'death_front' : 'death_behind';
+      player.state = deathType;
+      player.animationFrame = 0;
+      player.animationTime = 0;
+      player.isDying = true;
+      player.isDisconnected = true; // Mark as disconnected
+      
+      // RESET SHIELD STATE ON DISCONNECT DEATH - FIX MOVEMENT BUG!
+      player.isShielding = false;
+      player.shieldReleasing = false;
+      player.wantsToShield = false;
+      player.isShieldSlamming = false;
+      player.shieldStuckTimer = 0;
+      
+      console.log(`💀 Disconnected player ${player.name} dying with ${deathType}`);
+      
+      // Broadcast death
+      io.emit('playerDied', { id: socket.id, killer: null, deathType: deathType });
+      
+      // Become corpse after death animation
+      setTimeout(() => {
+        if (players[socket.id]) {
+          players[socket.id].isCorpse = true;
+          players[socket.id].vx = 0;
+          players[socket.id].vy = 0;
+        }
+      }, 1300);
+      
+      // Fade away and remove after 5 seconds
+      setTimeout(() => {
+        if (players[socket.id]) {
+          io.emit('corpseFadeOut', { id: socket.id });
+          
+          // Remove after fade animation
+          setTimeout(() => {
+            delete players[socket.id];
+            socket.broadcast.emit('playerLeft', { id: socket.id });
+          }, 2000); // 2 second fade
+        }
+      }, 5000); // 5 seconds before fade starts
+    } else {
+      // Already dead or no player data - just remove
+      delete players[socket.id];
+      socket.broadcast.emit('playerLeft', { id: socket.id });
+    }
   });
   
   socket.on('error', (error) => {
@@ -215,14 +344,63 @@ io.on('connection', (socket) => {
 });
 
 function updateGame(dt) {
-  const GROUND_Y = 750; // Updated for larger world
+  const GROUND_Y = 5000; // Massive world ground level
   const GRAVITY = 1200;
   
   for (const id in players) {
     const p = players[id];
     
-    // Skip dead players - they don't update!
-    if (!p.alive) continue;
+    // Skip completely dead players (not alive and not a corpse)
+    if (!p.alive && !p.isDying) continue;
+    
+    // Corpses only get physics, no input
+    if (p.isCorpse) {
+      // Apply gravity to corpse
+      if (!p.onGround) {
+        p.vy += GRAVITY * dt;
+      }
+      
+      // Update position
+      p.y += p.vy * dt;
+      p.x += p.vx * dt;
+      
+      // Ground collision - ALWAYS use idle hitbox for consistent collision
+      const corpseBodyHitbox = hitboxData[p.character]?.animations?.idle?.bodyHitbox;
+      const corpseGameScale = hitboxData[p.character]?.gameScale || 1.0;
+      
+      if (corpseBodyHitbox) {
+        // Calculate feet position (bottom of body hitbox)
+        const corpseFeetOffset = (corpseBodyHitbox.y + corpseBodyHitbox.height) * corpseGameScale;
+        const corpseFeetY = p.y + corpseFeetOffset;
+        
+        if (corpseFeetY >= GROUND_Y) {
+          // Adjust corpse Y so feet are exactly on ground
+          p.y = GROUND_Y - corpseFeetOffset;
+          p.vy = 0;
+          p.onGround = true;
+        } else {
+          p.onGround = false;
+        }
+      } else {
+        // Fallback
+        if (p.y >= GROUND_Y) {
+          p.y = GROUND_Y;
+          p.vy = 0;
+          p.onGround = true;
+        } else {
+          p.onGround = false;
+        }
+      }
+      
+      // Friction
+      p.vx *= 0.9;
+      if (Math.abs(p.vx) < 1) p.vx = 0;
+      
+      continue; // Skip rest of game logic for corpses
+    }
+    
+    // Skip dying players (playing death animation, not yet corpse)
+    if (p.isDying) continue;
     
     const input = p._latestInput || { left: false, right: false, attack: false, jump: false };
     
@@ -264,14 +442,48 @@ function updateGame(dt) {
       }
     }
     
-    // Handle attack (can attack in air, but not during landing)
-    if (input.attack && p.attackCooldown <= 0 && !p.isAttacking && p.landingTime <= 0) {
+    // Handle shield (hold S to shield) - Works in AIR and GROUND!
+    if (input.shield && !p.isShielding && !p.shieldReleasing) {
+      // SHIELD WORKS BOTH IN AIR AND ON GROUND - same behavior
+      p.isShielding = true;
+      p.shieldReleasing = false;
+      p.state = 'shield';
+      p.animationFrame = 0; // Start from beginning of shield animation
+      p.animationTime = 0;
+      p.vx = 0; // Stop horizontal movement
+      p.wantsToShield = true; // Flag to continue shielding on landing
+      
+      // Cancel all other actions
+      p.isAttacking = false;
+      p.attackCooldown = 0;
+      p.landingTime = 0;
+      
+      const location = p.onGround ? 'on ground' : 'in air';
+      console.log(`🛡️ ${p.name} started shielding ${location} - ALL ACTIONS CANCELLED`);
+    } else if (!input.shield && p.isShielding && !p.shieldReleasing) {
+      // Released shield - play remaining animation quickly
+      p.isShielding = false;
+      p.shieldReleasing = true;
+      console.log(`🛡️ ${p.name} releasing shield, playing remaining frames`);
+    } else if (!input.shield) {
+      // Clear shield request if S is released
+      p.wantsToShield = false;
+    }
+    
+    // Handle attack (can attack in air, but not during landing, not while shielding OR releasing shield)
+    if (input.attack && p.attackCooldown <= 0 && !p.isAttacking && !p.isShielding && !p.shieldReleasing && p.landingTime <= 0) {
       p.isAttacking = true;
       p.wasInAir = !p.onGround; // Track if attack started in air
       p.state = 'attack';
       p.animationFrame = 0;
       p.animationTime = 0;
       p.attackCooldown = 0.5;
+      
+      // CANCEL COMBO JUMPS when attacking
+      p.comboJumps = 0;
+      p.comboLevel = 0;
+      console.log(`⚔️ ${p.name} attacked - combo jumps CANCELLED`);
+      
       // STOP MOVEMENT only when attacking on ground (keep air momentum)
       if (p.onGround) {
         p.vx = 0;
@@ -279,33 +491,72 @@ function updateGame(dt) {
       checkAttackHits(p);
     }
     
-    // Update animation
-    p.animationTime += dt;
-    const animData = hitboxData[p.character]?.animations?.[p.state];
-    const frameTime = animData?.frameTime || 0.1; // Use custom frame time or default
-    if (p.animationTime >= frameTime) {
-      p.animationTime = 0;
-      p.animationFrame++;
+    // Update animation (skip if dying - client handles death animation)
+    if (!p.isDying) {
+      const animData = hitboxData[p.character]?.animations?.[p.state];
+      const maxFrames = animData?.frames || 16;
       
-      // Check if attack animation finished
-      if (p.state === 'attack' && p.isAttacking) {
-        const maxFrames = animData?.frames || 16;
-        if (p.animationFrame >= maxFrames) {
-          // Attack finished
-          p.isAttacking = false;
-          p.animationFrame = 0;
-          p.animationTime = 0;
-          
-          // Determine next state based on current situation
-          if (!p.onGround) {
-            p.state = 'air';
-          } else if (p.landingTime > 0) {
-            p.state = 'land';
-          } else {
-            p.state = 'idle';
+      // Shield animation logic
+      if (p.state === 'shield') {
+        const shieldFrame = p.shieldFrame || 0;
+        
+        if (p.isShielding) {
+          // Playing shield animation ULTRA FAST until we reach shield frame, then freeze
+          if (p.animationFrame < shieldFrame) {
+            p.animationTime += dt;
+            const ultraFastFrameTime = 0.015; // ULTRA fast (15ms per frame) - 2x faster!
+            if (p.animationTime >= ultraFastFrameTime) {
+              p.animationTime = 0;
+              p.animationFrame++;
+            }
           }
-        } else {
-          checkAttackHits(p);
+          // Freeze on shield frame while holding S
+        } else if (p.shieldReleasing) {
+          // Released S - play remaining animation ULTRA FAST
+          p.animationTime += dt;
+          const ultraFastFrameTime = 0.015; // ULTRA fast (15ms per frame) - 2x faster!
+          if (p.animationTime >= ultraFastFrameTime) {
+            p.animationTime = 0;
+            p.animationFrame++;
+            
+            if (p.animationFrame >= maxFrames) {
+              // Shield animation finished
+              p.shieldReleasing = false;
+              p.state = p.onGround ? 'idle' : 'air';
+              p.animationFrame = 0;
+              p.animationTime = 0;
+              console.log(`🛡️ ${p.name} shield animation complete`);
+            }
+          }
+        }
+      } else {
+        // Normal animation for non-shield states
+        p.animationTime += dt;
+        const frameTime = animData?.frameTime || 0.1;
+        if (p.animationTime >= frameTime) {
+          p.animationTime = 0;
+          p.animationFrame++;
+          
+          // Check if attack animation finished
+          if (p.state === 'attack' && p.isAttacking) {
+            if (p.animationFrame >= maxFrames) {
+              // Attack finished
+              p.isAttacking = false;
+              p.animationFrame = 0;
+              p.animationTime = 0;
+              
+              // Determine next state based on current situation
+              if (!p.onGround) {
+                p.state = 'air';
+              } else if (p.landingTime > 0) {
+                p.state = 'land';
+              } else {
+                p.state = 'idle';
+              }
+            } else {
+              checkAttackHits(p);
+            }
+          }
         }
       }
       
@@ -323,6 +574,23 @@ function updateGame(dt) {
       } else {
         p.attackStuckTimer = 0;
       }
+      
+      // Failsafe: If shield is stuck, force reset after 2 seconds
+      if ((p.isShielding || p.shieldReleasing) && p.state === 'shield') {
+        if (!p.shieldStuckTimer) p.shieldStuckTimer = 0;
+        p.shieldStuckTimer += dt;
+        if (p.shieldStuckTimer > 2.0) {
+          console.log(`Force resetting stuck shield for player ${p.id}`);
+          p.isShielding = false;
+          p.shieldReleasing = false;
+          p.shieldStuckTimer = 0;
+          p.state = p.onGround ? 'idle' : 'air';
+          p.animationFrame = 0;
+          p.animationTime = 0;
+        }
+      } else {
+        p.shieldStuckTimer = 0;
+      }
     }
     
     // Apply gravity
@@ -333,57 +601,149 @@ function updateGame(dt) {
     // Update Y position
     p.y += p.vy * dt;
     
-    // Ground collision
-    if (p.y >= GROUND_Y) {
-      p.y = GROUND_Y;
-      p.vy = 0;
-      p.onGround = true;
+    // Ground collision - ALWAYS use idle hitbox for consistent ground collision
+    // This prevents jittering when switching between animations with different hitbox sizes
+    const bodyHitbox = hitboxData[p.character]?.animations?.idle?.bodyHitbox;
+    const gameScale = hitboxData[p.character]?.gameScale || 1.0;
+    
+    if (bodyHitbox) {
+      // Calculate feet position (bottom of body hitbox)
+      const feetOffset = (bodyHitbox.y + bodyHitbox.height) * gameScale;
+      const feetY = p.y + feetOffset;
       
-      // Reset jump flag and handle landing whenever touching ground
-      if (!wasOnGround) {
-        p.isJumping = false;
-        
-        // Trigger landing animation if just landed and not attacking
-        if (!p.isAttacking) {
-          p.state = 'land';
-          p.animationFrame = 0;
-          p.animationTime = 0;
-          p.landingTime = 0.1; // Very short landing (0.1 seconds)
-        } else {
-          // If attacking while landing, let attack finish but reset landing
-          p.landingTime = 0;
-        }
+      // Add tolerance to prevent micro-bouncing (5 pixel buffer)
+      const GROUND_TOLERANCE = 5;
+      
+      if (feetY >= GROUND_Y - GROUND_TOLERANCE) {
+        // Snap to ground if close enough
+        p.y = GROUND_Y - feetOffset;
+        p.vy = 0;
+        p.onGround = true;
+      } else {
+        p.onGround = false;
       }
     } else {
-      p.onGround = false;
+      // Fallback to old method if no hitbox data
+      if (p.y >= GROUND_Y - 5) {
+        p.y = GROUND_Y;
+        p.vy = 0;
+        p.onGround = true;
+      } else {
+        p.onGround = false;
+      }
     }
     
-    // Movement and state management
-    if (p.hp > 0) {
-      let moving = false;
+    // Handle landing state transitions
+    if (p.onGround && !wasOnGround) {
+      // Just landed
+      p.isJumping = false;
       
-      // Handle movement (only if not attacking)
-      if (!p.isAttacking) {
-        if (input.left) {
-          p.vx = -p.speed;
-          p.facingRight = false;
-          moving = true;
-          // Cancel landing if moving
-          if (p.landingTime > 0) {
-            p.landingTime = 0;
-          }
+      // Check if player wants to shield on landing - CONTINUE SHIELD!
+      if (p.wantsToShield) {
+        // Skip landing animation, continue shield (DON'T reset animation!)
+        p.isShielding = true;
+        p.shieldReleasing = false;
+        p.state = 'shield';
+        // DON'T RESET ANIMATION - keep current frame to avoid reset loop!
+        // p.animationFrame stays at current value (already at shield frame)
+        // p.animationTime stays at current value
+        p.vx = 0;
+        p.wantsToShield = false;
+        
+        // Cancel all other actions
+        p.isAttacking = false;
+        p.attackCooldown = 0;
+        p.landingTime = 0;
+        
+        console.log(`🛡️ ${p.name} landed while shielding - continuing shield hold at frame ${p.animationFrame}`);
+      }
+      // Trigger landing animation if just landed and not attacking or shielding
+      else if (!p.isAttacking && !p.isShielding) {
+        p.state = 'land';
+        p.animationFrame = 0;
+        p.animationTime = 0;
+        p.landingTime = 0.1; // Very short landing (0.1 seconds)
+      } else {
+        // If attacking while landing, let attack finish but reset landing
+        p.landingTime = 0;
+      }
+    }
+    
+    // Movement and state management (skip if dying, attacking, or shielding)
+    if (!p.isAttacking && !p.isDying && !p.isShielding && !p.shieldReleasing) {
+      // Only allow movement if not attacking, dying, or shielding
+      if (input.left || input.right) {
+        // Handle both keys pressed - left takes priority
+        let direction = 0;
+        if (input.left && input.right) {
+          direction = -1; // Left priority
+        } else if (input.left) {
+          direction = -1;
         } else if (input.right) {
-          p.vx = p.speed;
-          p.facingRight = true;
-          moving = true;
-          // Cancel landing if moving
-          if (p.landingTime > 0) {
-            p.landingTime = 0;
-          }
-        } else {
-          p.vx *= 0.8;
-          if (Math.abs(p.vx) < 1) p.vx = 0;
+          direction = 1;
         }
+        
+        p.facingRight = direction > 0;
+        
+        // Combo system: detect rapid direction changes (gets progressively harder)
+        if (p.lastDirection !== 0 && p.lastDirection !== direction) {
+          // Direction changed!
+          const timeSinceLastChange = Date.now() - p.directionChangeTime;
+          
+          // Calculate required speed based on combo level (gets faster each time)
+          // Level 0: 300ms, Level 1: 270ms, Level 2: 240ms, Level 3: 210ms, Level 4: 180ms
+          const requiredSpeed = 300 - (p.comboLevel * 30);
+          const resetThreshold = 500 - (p.comboLevel * 20); // Also gets stricter
+          
+          // If changed direction quickly enough, award a combo jump
+          if (timeSinceLastChange < requiredSpeed && p.comboJumps < p.maxComboJumps) {
+            p.comboJumps++;
+            p.comboLevel++; // Increase difficulty for next combo
+            console.log(`🔥 COMBO x${p.comboLevel}! ${p.name} earned jump #${p.comboJumps} (${timeSinceLastChange}ms < ${requiredSpeed}ms)`);
+          } else if (timeSinceLastChange > resetThreshold) {
+            // Reset combo if too slow
+            p.comboJumps = 0;
+            p.comboLevel = 0;
+            console.log(`💔 Combo broken for ${p.name} (too slow: ${timeSinceLastChange}ms)`);
+          }
+          
+          p.directionChangeTime = Date.now();
+        }
+        p.lastDirection = direction;
+        
+        // Apply acceleration
+        const targetVx = direction * p.speed;
+        const acceleration = p.onGround ? 2000 : 1000; // Faster accel on ground
+        
+        // Check if we're changing direction (velocity and input are opposite)
+        const changingDirection = (p.vx > 0 && direction < 0) || (p.vx < 0 && direction > 0);
+        
+        if (changingDirection) {
+          // Apply VERY strong deceleration when changing direction
+          const deceleration = p.onGround ? 3000 : 3500; // Even stronger in air for instant response
+          p.vx += direction * deceleration * dt;
+          
+          // Clamp to target if we overshoot
+          if ((direction > 0 && p.vx > targetVx) || (direction < 0 && p.vx < targetVx)) {
+            p.vx = targetVx;
+          }
+        } else if (Math.abs(p.vx) < Math.abs(targetVx)) {
+          // Normal acceleration when moving in same direction
+          p.vx += direction * acceleration * dt;
+          if (Math.abs(p.vx) > Math.abs(targetVx)) p.vx = targetVx;
+        } else if (Math.abs(p.vx) > Math.abs(targetVx)) {
+          // If we're going faster than target (e.g., from momentum), slow down
+          const slowdown = p.onGround ? 2000 : 1200;
+          const sign = p.vx > 0 ? -1 : 1;
+          p.vx += sign * slowdown * dt;
+          
+          // Clamp to target
+          if (Math.abs(p.vx) < Math.abs(targetVx)) {
+            p.vx = targetVx;
+          }
+        }
+        
+        const moving = Math.abs(p.vx) > 10;
         
         // Set state based on ground and movement (only if not attacking)
         if (!p.onGround) {
@@ -393,15 +753,127 @@ function updateGame(dt) {
           p.state = moving ? 'walk' : 'idle';
         }
       } else {
-        // KEEP VELOCITY AT 0 while attacking ON GROUND (allow air momentum!)
+        // No input - apply friction/deceleration
         if (p.onGround) {
-          p.vx = 0;
+          // Strong friction on ground
+          p.vx *= 0.8;
+          if (Math.abs(p.vx) < 1) p.vx = 0;
+        } else {
+          // Moderate air friction when no input
+          p.vx *= 0.92;
+          if (Math.abs(p.vx) < 1) p.vx = 0;
         }
-        // In air: keep momentum (vx stays as is)
+        
+        // Set state
+        if (!p.onGround) {
+          p.state = 'air';
+        } else if (p.landingTime <= 0) {
+          p.state = 'idle';
+        }
       }
-      
-      p.x += p.vx * dt;
-      p.x = Math.max(50, Math.min(1550, p.x)); // Wider world bounds
+    }
+    
+    // Apply horizontal momentum ALWAYS (even during attacks)
+    // Apply slight friction during attacks/shielding to slow down momentum gradually
+    if (p.isShielding || p.shieldReleasing) {
+      // Shielding: strong friction to stop quickly
+      p.vx *= 0.7;
+      if (Math.abs(p.vx) < 5) p.vx = 0;
+    } else if (p.isAttacking && !p.onGround) {
+      // In air attack: maintain momentum with gentle friction
+      p.vx *= 0.98; // Very gentle friction in air
+      if (Math.abs(p.vx) < 5) p.vx = 0;
+    } else if (p.isAttacking && p.onGround) {
+      // Ground attack: stronger friction to stop
+      p.vx *= 0.85;
+      if (Math.abs(p.vx) < 10) p.vx = 0;
+    }
+    
+    p.x += p.vx * dt;
+    // NO BOUNDS - infinite scrolling world!
+    // p.x = Math.max(50, Math.min(9950, p.x)); // Removed clamping for true freedom
+    
+    // Player-to-player collision (bodies push each other) - Support multiple body hitboxes
+    if (!p.isDying && !p.isCorpse) {
+      for (const otherId in players) {
+        const other = players[otherId];
+        if (other.id === p.id || other.isDying || other.isCorpse) continue;
+        
+        const pScale = hitboxData[p.character]?.gameScale || 1.0;
+        const otherScale = hitboxData[other.character]?.gameScale || 1.0;
+        
+        // Get all body hitboxes for current frame
+        const pAnimData = hitboxData[p.character]?.animations?.[p.state] || hitboxData[p.character]?.animations?.idle;
+        const otherAnimData = hitboxData[other.character]?.animations?.[other.state] || hitboxData[other.character]?.animations?.idle;
+        
+        if (!pAnimData || !otherAnimData) continue;
+        
+        const pFrame = p.animationFrame % (pAnimData.frames || 1);
+        const otherFrame = other.animationFrame % (otherAnimData.frames || 1);
+        
+        const pBodyHitboxes = pAnimData.bodyHitboxes?.filter(hb => hb.frame === pFrame) || 
+                             (pAnimData.bodyHitbox ? [pAnimData.bodyHitbox] : []);
+        const otherBodyHitboxes = otherAnimData.bodyHitboxes?.filter(hb => hb.frame === otherFrame) || 
+                                 (otherAnimData.bodyHitbox ? [otherAnimData.bodyHitbox] : []);
+        
+        if (pBodyHitboxes.length === 0 || otherBodyHitboxes.length === 0) continue;
+        
+        // Check collision between ALL body hitboxes
+        let collisionDetected = false;
+        let minOverlapX = Infinity;
+        let minOverlapY = Infinity;
+        
+        for (const pHitbox of pBodyHitboxes) {
+          for (const otherHitbox of otherBodyHitboxes) {
+            const pLeft = p.x + pHitbox.x * pScale;
+            const pRight = pLeft + pHitbox.width * pScale;
+            const pTop = p.y + pHitbox.y * pScale;
+            const pBottom = pTop + pHitbox.height * pScale;
+            
+            const otherLeft = other.x + otherHitbox.x * otherScale;
+            const otherRight = otherLeft + otherHitbox.width * otherScale;
+            const otherTop = other.y + otherHitbox.y * otherScale;
+            const otherBottom = otherTop + otherHitbox.height * otherScale;
+            
+            // Check for collision
+            if (pLeft < otherRight && pRight > otherLeft &&
+                pTop < otherBottom && pBottom > otherTop) {
+              collisionDetected = true;
+              const overlapX = Math.min(pRight - otherLeft, otherRight - pLeft);
+              const overlapY = Math.min(pBottom - otherTop, otherBottom - pTop);
+              minOverlapX = Math.min(minOverlapX, overlapX);
+              minOverlapY = Math.min(minOverlapY, overlapY);
+            }
+          }
+        }
+        
+        if (collisionDetected) {
+          // Push along the axis with smallest overlap
+          if (minOverlapX < minOverlapY) {
+            // Push horizontally
+            const pushDir = (p.x < other.x) ? -1 : 1;
+            const pushAmount = minOverlapX / 2;
+            p.x += pushDir * pushAmount;
+            other.x -= pushDir * pushAmount;
+            
+            // Transfer some momentum
+            const avgVx = (p.vx + other.vx) / 2;
+            p.vx = avgVx + pushDir * 50;
+            other.vx = avgVx - pushDir * 50;
+          } else {
+            // Push vertically
+            const pushDir = (p.y < other.y) ? -1 : 1;
+            const pushAmount = minOverlapY / 2;
+            p.y += pushDir * pushAmount;
+            other.y -= pushDir * pushAmount;
+            
+            // Transfer some momentum
+            const avgVy = (p.vy + other.vy) / 2;
+            p.vy = avgVy + pushDir * 50;
+            other.vy = avgVy - pushDir * 50;
+          }
+        }
+      }
     }
     
     // Failsafe: If stuck in air state while on ground for too long, force reset
@@ -448,13 +920,26 @@ function checkAttackHits(attacker) {
     if (targetId === attacker.id) continue;
     const target = players[targetId];
     
-    // Skip dead or invincible players
-    if (target.hp <= 0 || target.invincible) continue;
+    // Skip invincible players, but allow hitting corpses
+    if (target.invincible) continue;
     
-    const targetBodyHitbox = hitboxData[target.character]?.animations?.[target.state]?.bodyHitbox;
-    if (!targetBodyHitbox) continue;
+    // Can't damage corpses, but can push them
+    const canDamage = target.hp > 0;
     
     const targetScale = hitboxData[target.character]?.gameScale || 1.0;
+    
+    // Get all body hitboxes for target's current frame
+    const targetAnimData = hitboxData[target.character]?.animations?.[target.state];
+    if (!targetAnimData) continue;
+    
+    const targetFrame = target.animationFrame % (targetAnimData.frames || 1);
+    const targetBodyHitboxes = targetAnimData.bodyHitboxes?.filter(hb => hb.frame === targetFrame) || 
+                              (targetAnimData.bodyHitbox ? [targetAnimData.bodyHitbox] : []);
+    
+    if (targetBodyHitboxes.length === 0) continue;
+    
+    const targetSpriteFacesLeft = hitboxData[target.character]?.facing === 'left';
+    const targetIsFlipped = targetSpriteFacesLeft ? target.facingRight : !target.facingRight;
     
     for (const attackHb of frameHitboxes) {
       // Use EXACT same formula as game.js!
@@ -464,57 +949,132 @@ function checkAttackHits(attacker) {
       const attackX = attacker.x + attackHb.x * attackerScale * (attackerIsFlipped ? -1 : 1) - (attackerIsFlipped ? attackHb.width * attackerScale : 0);
       const attackY = attacker.y + attackHb.y * attackerScale;
       
-      const targetSpriteFacesLeft = hitboxData[target.character]?.facing === 'left';
-      const targetIsFlipped = targetSpriteFacesLeft ? target.facingRight : !target.facingRight;
-      
-      const targetX = target.x + targetBodyHitbox.x * targetScale * (targetIsFlipped ? -1 : 1) - (targetIsFlipped ? targetBodyHitbox.width * targetScale : 0);
-      const targetY = target.y + targetBodyHitbox.y * targetScale;
-      
-      if (attackX < targetX + (targetBodyHitbox.width * targetScale) &&
-          attackX + (attackHb.width * attackerScale) > targetX &&
-          attackY < targetY + (targetBodyHitbox.height * targetScale) &&
-          attackY + (attackHb.height * attackerScale) > targetY) {
+      // Check collision with ALL target body hitboxes
+      let hitDetected = false;
+      for (const targetBodyHitbox of targetBodyHitboxes) {
+        const targetX = target.x + targetBodyHitbox.x * targetScale * (targetIsFlipped ? -1 : 1) - (targetIsFlipped ? targetBodyHitbox.width * targetScale : 0);
+        const targetY = target.y + targetBodyHitbox.y * targetScale;
         
-        // Apply knockback
-        const knockbackForce = 300;
+        if (attackX < targetX + (targetBodyHitbox.width * targetScale) &&
+            attackX + (attackHb.width * attackerScale) > targetX &&
+            attackY < targetY + (targetBodyHitbox.height * targetScale) &&
+            attackY + (attackHb.height * attackerScale) > targetY) {
+          hitDetected = true;
+          break;
+        }
+      }
+      
+      if (hitDetected) {
+        // CHECK IF TARGET IS SHIELDING - BLOCK/REDUCE DAMAGE!
+        let isBlocked = false;
+        let damageReduction = 0;
+        
+        if (target.isShielding && target.state === 'shield') {
+          // Get shield hitboxes for target's current frame
+          const targetShieldAnimData = hitboxData[target.character]?.animations?.shield;
+          if (targetShieldAnimData && targetShieldAnimData.shieldHitboxes) {
+            const targetShieldFrame = target.animationFrame % (targetShieldAnimData.frames || 1);
+            const targetShieldHitboxes = targetShieldAnimData.shieldHitboxes.filter(hb => hb.frame === targetShieldFrame);
+            
+            // Check if attack hits shield hitbox
+            for (const shieldHb of targetShieldHitboxes) {
+              const shieldX = target.x + shieldHb.x * targetScale * (targetIsFlipped ? -1 : 1) - (targetIsFlipped ? shieldHb.width * targetScale : 0);
+              const shieldY = target.y + shieldHb.y * targetScale;
+              
+              // Check if attack overlaps with shield
+              if (attackX < shieldX + (shieldHb.width * targetScale) &&
+                  attackX + (attackHb.width * attackerScale) > shieldX &&
+                  attackY < shieldY + (shieldHb.height * targetScale) &&
+                  attackY + (attackHb.height * attackerScale) > shieldY) {
+                isBlocked = true;
+                damageReduction = 0.9; // 90% damage reduction!
+                console.log(`🛡️ SHIELD BLOCK! ${target.name} blocked ${attacker.name}'s attack!`);
+                
+                // Emit shield block event for visual/audio feedback
+                io.emit('shieldBlock', {
+                  defenderId: target.id,
+                  attackerId: attacker.id,
+                  x: target.x,
+                  y: target.y
+                });
+                break;
+              }
+            }
+          }
+        }
+        
+        // Apply knockback (works on corpses too!)
+        const knockbackForce = target.isCorpse ? 400 : (isBlocked ? 100 : 300); // Much less knockback when blocked
         const direction = attacker.facingRight ? 1 : -1;
         target.vx = direction * knockbackForce;
-        target.vy = -200; // Launch upward
+        target.vy = target.isCorpse ? -150 : (isBlocked ? -50 : -200); // Minimal launch when blocked
         target.onGround = false;
         
-        // Deal damage
-        target.hp -= 10;
+        // Only deal damage if alive
+        if (canDamage) {
+          const baseDamage = 10;
+          const finalDamage = Math.ceil(baseDamage * (1 - damageReduction)); // Apply damage reduction
+          target.hp -= finalDamage;
+          
+          // Emit hit event for visual effects
+          io.emit('playerHit', { 
+            attackerId: attacker.id, 
+            targetId: target.id,
+            damage: finalDamage,
+            blocked: isBlocked
+          });
+        } else if (target.isCorpse) {
+          // Emit corpse hit event for blood particles
+          io.emit('corpseHit', {
+            targetId: target.id,
+            x: target.x,
+            y: target.y
+          });
+        }
         
-        // Emit hit event for visual effects
-        io.emit('playerHit', { 
-          attackerId: attacker.id, 
-          targetId: target.id,
-          damage: 10
-        });
-        
-        if (target.hp <= 0) {
+        if (canDamage && target.hp <= 0) {
           target.hp = 0;
-          target.alive = false; // Mark as dead (hide from game)
-          target.vx = 0;
-          target.vy = 0;
+          
+          // Determine death animation based on facing direction
+          // If attacker is facing same direction as target, hit from behind
+          const hitFromBehind = attacker.facingRight === target.facingRight;
+          target.state = hitFromBehind ? 'death_behind' : 'death_front';
+          target.animationFrame = 0;
+          target.animationTime = 0;
+          target.isDying = true; // Flag for death animation
+          target.isCorpse = false; // Not a corpse yet
+          
+          // RESET SHIELD STATE ON DEATH - FIX MOVEMENT BUG!
+          target.isShielding = false;
+          target.shieldReleasing = false;
+          target.wantsToShield = false;
+          target.isShieldSlamming = false;
+          target.shieldStuckTimer = 0;
+          
+          console.log(`💀 Death: ${target.name} killed by ${attacker.name}`);
+          console.log(`   Attacker facing: ${attacker.facingRight ? 'RIGHT' : 'LEFT'}, Target facing: ${target.facingRight ? 'RIGHT' : 'LEFT'}`);
+          console.log(`   Hit from behind: ${hitFromBehind}, Animation: ${target.state}`);
+          
           attacker.kills++; // Increment kill count
-          io.emit('playerDied', { id: target.id, killer: attacker.id });
+          io.emit('playerDied', { id: target.id, killer: attacker.id, deathType: target.state });
+          
+          // After death animation, become a pushable corpse
           setTimeout(() => {
-            if (players[target.id]) {
-              target.hp = target.maxHp;
-              target.x = 400 + Math.random() * 800;
-              target.y = 200; // SPAWN IN AIR to fall down
+            if (players[target.id] && target.isDying) {
+              target.isCorpse = true; // Now a pushable corpse
               target.vx = 0;
               target.vy = 0;
-              target.onGround = false; // Start in air
-              target.state = 'air';
-              target.isAttacking = false;
-              target.invincible = true; // SPAWN INVINCIBILITY
-              target.invincibleTime = 2.0; // 2 seconds
-              target.alive = true; // NOW ALIVE - show in game
-              io.emit('playerRespawned', { id: target.id });
             }
-          }, 3000);
+          }, 1300);
+          
+          // Enable respawn after random 3-7 seconds
+          const respawnTime = 3000 + Math.random() * 4000; // 3000-7000ms
+          setTimeout(() => {
+            if (players[target.id] && target.isDying) {
+              target.canRespawn = true;
+              io.emit('canRespawn', { id: target.id });
+            }
+          }, respawnTime);
         }
         break;
       }
@@ -540,7 +1100,10 @@ function snapshot() {
       lastInputSeq: p.lastInputSeq,
       invincible: p.invincible, // SEND INVINCIBILITY STATE
       invincibleTime: p.invincibleTime, // SEND TIMER
-      alive: p.alive // SEND ALIVE STATE
+      alive: p.alive, // SEND ALIVE STATE
+      isDying: p.isDying, // SEND DYING STATE
+      isCorpse: p.isCorpse, // SEND CORPSE STATE
+      canRespawn: p.canRespawn // SEND RESPAWN AVAILABILITY
     }))
   };
 }
