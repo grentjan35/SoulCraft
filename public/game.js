@@ -389,13 +389,27 @@ async function reloadHitboxes() {
 }
 
 async function startGame() {
+  // Hide play button immediately to prevent multiple clicks
+  startBtn.style.display = 'none';
+  
+  // Create a connecting message in place of button
+  const connectingMessage = document.createElement('div');
+  connectingMessage.className = 'connecting-message';
+  connectingMessage.innerHTML = '<span class="loading-spinner"></span>Connecting to server...';
+  connectingMessage.style.width = '100%';
+  connectingMessage.style.textAlign = 'center';
+  connectingMessage.style.padding = '18px';
+  connectingMessage.style.background = 'linear-gradient(135deg, #8b4513 0%, #a0522d 100%)';
+  connectingMessage.style.border = '3px solid #8b4513';
+  connectingMessage.style.borderRadius = '8px';
+  connectingMessage.style.color = '#f4e4c1';
+  connectingMessage.style.fontSize = '24px';
+  connectingMessage.style.fontWeight = '900';
+  connectingMessage.style.fontFamily = '\'Cinzel\', serif';
+  startBtn.parentNode.appendChild(connectingMessage);
+  
   myName = nameInput.value.trim();
   myCharacter = selectedCharacter;
-  
-  // Lock button and show loading state
-  startBtn.disabled = true;
-  startBtn.classList.add('loading');
-  startBtn.innerHTML = '<span class="loading-spinner"></span>Connecting to server, may take a few seconds...';
   
   // Load hitbox data
   try {
@@ -414,9 +428,10 @@ async function startGame() {
   } catch (error) {
     console.error('Critical error loading sprite sheets:', error);
     alert('Failed to load game sprites. Please refresh the page and try again.');
+    // Restore button if there's an error
+    connectingMessage.remove();
+    startBtn.style.display = 'block';
     startBtn.disabled = false;
-    startBtn.classList.remove('loading');
-    startBtn.innerHTML = 'Start Game';
     return;
   }
   
@@ -443,6 +458,20 @@ async function startGame() {
   
   // Connect to server
   socket = io();
+  
+  // Handle name already exists error
+  socket.on('nameExists', (data) => {
+    alert(data.message);
+    console.log('Name already exists:', data.message);
+    
+    // Remove connecting message and restore button
+    connectingMessage.remove();
+    startBtn.style.display = 'block';
+    startBtn.disabled = false;
+    
+    // Disconnect the socket
+    socket.disconnect();
+  });
   
   socket.on('connect', () => {
     console.log('Connected to server');

@@ -143,6 +143,18 @@ io.on('connection', (socket) => {
   console.log('Player connected:', socket.id, 'Total players:', Object.keys(players).length + 1);
   socket.on('joinGame', (data) => {
     const { name, character } = data;
+    
+    // Check if another player with same name already exists
+    const nameExists = Object.values(players).some(player => 
+      player.name.toLowerCase() === name.toLowerCase()
+    );
+    
+    if (nameExists) {
+      // Reject the connection if name already exists
+      socket.emit('nameExists', { message: 'A player with that name already exists!' });
+      return;
+    }
+    
     players[socket.id] = createPlayer(socket.id, name, character);
     
     // Load shield frame from hitbox data
