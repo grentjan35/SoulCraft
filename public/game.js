@@ -260,13 +260,14 @@ function playFrameSound(playerId, character, state, frame) {
   const frameSound = animData.frameSounds.find(fs => fs.frame === frame);
   if (!frameSound) return;
   
-  // Use a simpler tracking key that only prevents rapid-fire on same frame
+  // Use a tracking key that includes both player ID and state
   const key = `${playerId}_${state}_${frame}`;
   const now = Date.now();
   
-  // Only block if we played this exact sound very recently (within 100ms)
-  if (lastPlayedFrame[key] && (now - lastPlayedFrame[key]) < 100) {
-    return; // Silently block spam
+  // More aggressive spam prevention for attack sounds (300ms cooldown)
+  const cooldown = state === 'attack' ? 300 : 100;
+  if (lastPlayedFrame[key] && (now - lastPlayedFrame[key]) < cooldown) {
+    return; // Block duplicate sounds
   }
   
   // Store timestamp instead of boolean
@@ -505,6 +506,17 @@ async function startGame() {
       }
       
       if (players[sp.id]) {
+        // Store old animation frame before updating
+        const previousFrame = players[sp.id].animationFrame;
+        
+        // Fix for attack animation running twice: prevent frame jumps in attack animation
+        if (sp.state === 'attack' && oldState === 'attack') {
+          // Only allow frame to increase by at most 1 from previous frame
+          if (sp.animationFrame > previousFrame + 1) {
+            sp.animationFrame = previousFrame + 1;
+          }
+        }
+        
         Object.assign(players[sp.id], sp);
       } else {
         players[sp.id] = sp;
@@ -543,8 +555,9 @@ async function startGame() {
         playAnimationSound(sp.state);
       }
       
-      // Check if we should play frame sounds
-      if (oldFrame !== sp.animationFrame || oldState !== sp.state) {
+      // Check if we should play frame sounds - prevent duplicate sounds with more strict checking
+      if ((oldFrame !== sp.animationFrame || oldState !== sp.state) && 
+          (sp.state !== 'attack' || !lastPlayedFrame[`${sp.id}_${sp.state}_${sp.animationFrame}`])) {
         playFrameSound(sp.id, sp.character, sp.state, sp.animationFrame);
       }
       
@@ -1890,14 +1903,16 @@ function drawPlayer(player, isMe) {
           ctx.fillStyle = 'rgba(218, 165, 32, 0.3)';
           ctx.fillRect(bodyX, bodyY, bh.width * hitboxScale, bh.height * hitboxScale);
           
-          // Draw feet line (bottom of hitbox) in bright green
-          const feetY = bodyY + bh.height * hitboxScale;
-          ctx.strokeStyle = '#00ff00';
-          ctx.lineWidth = 4;
-          ctx.beginPath();
-          ctx.moveTo(bodyX - 20, feetY);
-          ctx.lineTo(bodyX + bh.width * hitboxScale + 20, feetY);
-          ctx.stroke();
+          // Only draw feet line if not in 'land' state (prevents green box on landing)
+          if (player.state !== 'land') {
+            const feetY = bodyY + bh.height * hitboxScale;
+            ctx.strokeStyle = '#00ff00';
+            ctx.lineWidth = 4;
+            ctx.beginPath();
+            ctx.moveTo(bodyX - 20, feetY);
+            ctx.lineTo(bodyX + bh.width * hitboxScale + 20, feetY);
+            ctx.stroke();
+          }
         });
       } else if (animData.bodyHitbox) {
         // Legacy single body hitbox support
@@ -1911,14 +1926,16 @@ function drawPlayer(player, isMe) {
         ctx.fillStyle = 'rgba(218, 165, 32, 0.3)';
         ctx.fillRect(bodyX, bodyY, bh.width * hitboxScale, bh.height * hitboxScale);
         
-        // Draw feet line (bottom of hitbox) in bright green
-        const feetY = bodyY + bh.height * hitboxScale;
-        ctx.strokeStyle = '#00ff00';
-        ctx.lineWidth = 4;
-        ctx.beginPath();
-        ctx.moveTo(bodyX - 20, feetY);
-        ctx.lineTo(bodyX + bh.width * hitboxScale + 20, feetY);
-        ctx.stroke();
+        // Only draw feet line if not in 'land' state (prevents green box on landing)
+        if (player.state !== 'land') {
+          const feetY = bodyY + bh.height * hitboxScale;
+          ctx.strokeStyle = '#00ff00';
+          ctx.lineWidth = 4;
+          ctx.beginPath();
+          ctx.moveTo(bodyX - 20, feetY);
+          ctx.lineTo(bodyX + bh.width * hitboxScale + 20, feetY);
+          ctx.stroke();
+        }
       }
       
       // Draw attack hitboxes (red) - YOUR custom attack hitboxes!
