@@ -144,14 +144,33 @@ io.on('connection', (socket) => {
   socket.on('joinGame', (data) => {
     const { name, character } = data;
     
-    // Check if another player with same name already exists
+    // Robust name validation and duplicate checking
+    const trimmedName = (name || '').toString().trim();
+    
+    if (!trimmedName) {
+      socket.emit('nameExists', { message: 'Invalid name provided!' });
+      return;
+    }
+    
+    if (trimmedName.length < 2 || trimmedName.length > 20) {
+      socket.emit('nameExists', { message: 'Name must be 2-20 characters long!' });
+      return;
+    }
+    
+    // Check if this socket already has a player (prevent duplicates from same connection)
+    if (players[socket.id]) {
+      socket.emit('nameExists', { message: 'You are already in the game!' });
+      return;
+    }
+    
+    // Check if another player with same name already exists (case-insensitive)
     const nameExists = Object.values(players).some(player => 
-      player.name.toLowerCase() === name.toLowerCase()
+      player.name.toLowerCase() === trimmedName.toLowerCase()
     );
     
     if (nameExists) {
       // Reject the connection if name already exists
-      socket.emit('nameExists', { message: 'A player with that name already exists!' });
+      socket.emit('nameExists', { message: `The name "${trimmedName}" is already taken!` });
       return;
     }
     

@@ -94,73 +94,131 @@ const lastPlayedFrame = {};
 // Track the highest frame seen for each player/animation to detect loops
 const highestFrameSeen = {};
 
-// Load sounds
-function loadSounds() {
-  // Load hurt sounds (10 variations)
-  for (let i = 1; i <= 10; i++) {
-    const audio = new Audio(`/assets/sounds/hurt/region ${i}.wav`);
-    audio.volume = 0.5;
-    sounds.hurt.push(audio);
+// OPTIMIZED Sound Loading - Using New 1.wav, 2.wav, 3.wav... Pattern!
+async function loadSounds() {
+  console.log('🚀 Loading sounds with OPTIMIZED numbered system (1.wav, 2.wav, 3.wav...)');
+  
+  // Sound folders with USER'S EXACT specifications! 
+  const soundCategories = [
+    { folder: 'death', key: 'death', maxFiles: 2, volume: 0.5, extensions: ['wav'] }, // When any player dies ✅
+    { folder: 'shield hit', key: 'shield_block', maxFiles: 4, volume: 0.4, extensions: ['wav'] }, // When shielded player gets hit ✅
+    { folder: 'sword slash', key: 'attack_slash', maxFiles: 2, volume: 0.4, extensions: ['wav'] }, // When player attacks (not sword_slash) ✅
+    { folder: 'woosh', key: 'jump', maxFiles: 4, volume: 0.4, extensions: ['wav'] }, // When player jumps/double jumps ✅
+    { folder: 'hit', key: 'hit', maxFiles: 2, volume: 0.6, extensions: ['wav'] }, // Regular hits ✅  
+    { folder: 'footsteps', key: 'footsteps', maxFiles: 8, volume: 0.3, extensions: ['wav'] } // Footsteps ✅
+  ];
+  
+  const loadPromises = [];
+  
+  for (const category of soundCategories) {
+    const basePath = `/assets/sounds/${category.folder}/`;
+    const soundArray = sounds[category.key] || [];
+    
+    console.log(`🔊 Loading ${category.folder} sounds...`);
+    
+    // Try to load numbered files with both extensions
+    for (let i = 1; i <= category.maxFiles; i++) {
+      for (const ext of category.extensions) {
+        const audio = new Audio();
+        const soundPath = basePath + `${i}.${ext}`;
+        
+        const promise = loadSingleSound(audio, soundPath)
+          .then(() => {
+            audio.volume = category.volume;
+            soundArray.push(audio);
+            console.log(`  ✅ Loaded ${category.folder}/${i}.${ext}`);
+            return audio;
+          })
+          .catch(() => {
+            // File doesn't exist, skip silently
+            return null;
+          });
+        
+        loadPromises.push(promise);
+      }
+    }
+    
+    // Store the sound array
+    sounds[category.key] = soundArray;
   }
   
-  // Load slash sounds (4 variations)
-  const slashFiles = [
-    'a_woosh_sound_from_a-1760392738094.mp3_trimmed.wav',
-    'a_woosh_sound_from_a_#1-1760392753134.mp3_trimmed.wav',
-    'a_woosh_sound_from_a_#2-1760392757572.mp3_trimmed.wav',
-    'a_woosh_sound_from_a_#3-1760392761517.mp3_trimmed.wav'
-  ];
-  slashFiles.forEach(file => {
-    const audio = new Audio(`/assets/sounds/slash/${file}`);
-    audio.volume = 0.4;
-    sounds.slash.push(audio);
-  });
+  // Wait for all sounds to finish loading
+  await Promise.all(loadPromises);
   
-  // Load hit sounds (4 variations)
-  const hitFiles = [
-    'sword_slash_effects-1760392508026.mp3_trimmed.wav',
-    'sword_slash_effects_#1-1760392508027.mp3_trimmed.wav',
-    'sword_slash_effects_#2-1760392508027.mp3_trimmed.wav',
-    'sword_slash_effects_#3-1760392508028.mp3_trimmed.wav'
-  ];
-  hitFiles.forEach(file => {
-    const audio = new Audio(`/assets/sounds/hit/${file}`);
-    audio.volume = 0.6;
-    sounds.hit.push(audio);
-  });
-  
-  // Load chat sound (no pitch variation)
-  sounds.chat = new Audio('/assets/sounds/chat/chat.mp3');
-  sounds.chat.volume = 0.3;
+  // Summary with USER'S EXACT specifications
+  console.log('🎵 OPTIMIZED Sound Loading Complete!');
+  console.log(`  💀 Death sounds: ${sounds.death?.length || 0} (when any player dies)`);
+  console.log(`  🛡️  Shield block sounds: ${sounds.shield_block?.length || 0} (when shielded player gets hit)`);
+  console.log(`  ⚔️  Attack slash sounds: ${sounds.attack_slash?.length || 0} (when player attacks)`);
+  console.log(`  💨 Jump sounds: ${sounds.jump?.length || 0} (jumps and double jumps)`);
+  console.log(`  💥 Hit sounds: ${sounds.hit?.length || 0} (regular hits)`);
+  console.log(`  👣 Footstep sounds: ${sounds.footsteps?.length || 0} (walking)`);
 }
 
-// Play sound with random pitch variation
-function playSound(soundType, noPitchVariation = false) {
-  let soundArray = sounds[soundType];
-  
-  // For chat, play directly without variation
+// RENDER.COM OPTIMIZED - Fast sound loader with aggressive caching
+function loadSingleSound(audio, src) {
+  return new Promise((resolve, reject) => {
+    // Render.com timeout - more lenient for slower connections
+    const timeout = setTimeout(() => {
+      reject(new Error('Sound load timeout - render.com connection'));
+    }, 4000); // 4 second timeout for render.com
+    
+    audio.oncanplaythrough = () => {
+      clearTimeout(timeout);
+      resolve(audio);
+    };
+    
+    // Fallback - resolve on loadeddata if canplaythrough doesn't fire
+    audio.onloadeddata = () => {
+      clearTimeout(timeout);
+      resolve(audio);
+    };
+    
+    audio.onerror = () => {
+      clearTimeout(timeout);
+      reject(new Error(`Sound load failed: ${src}`));
+    };
+    
+    // RENDER.COM OPTIMIZATIONS
+    audio.preload = 'auto'; // Aggressive preloading
+    audio.crossOrigin = 'anonymous'; // Enable CORS
+    audio.src = src;
+  });
+}
+
+// Enhanced 3D positional sound player with distance and stereo panning
+function playSound(soundType, noPitchVariation = false, sourceX = null, sourceY = null) {
+  // For chat, skip since we don't have chat sound
   if (soundType === 'chat') {
-    const sound = sounds.chat.cloneNode();
-    sound.play().catch(e => console.log('Sound play failed:', e));
     return;
   }
   
+  let soundArray = sounds[soundType];
+  
   // Pick random sound from array
-  if (!soundArray || soundArray.length === 0) return;
+  if (!soundArray || soundArray.length === 0) {
+    console.log(`No sounds available for type: ${soundType}`);
+    return;
+  }
+  
   const randomSound = soundArray[Math.floor(Math.random() * soundArray.length)];
   
   // Clone to allow overlapping sounds
   const sound = randomSound.cloneNode();
   
-  // Add pitch variation (0.8 to 1.2 = deeper to higher)
+  // Add pitch variation (0.8 to 1.2 = deeper to higher) for variety
   if (!noPitchVariation) {
     sound.playbackRate = 0.8 + Math.random() * 0.4;
   }
   
-  sound.play().catch(e => console.log('Sound play failed:', e));
+  // Apply 3D positional audio if source position provided
+  if (sourceX !== null && sourceY !== null && myId && players[myId]) {
+    apply3DAudio(sound, sourceX, sourceY);
+  }
+  
+  // Play with error handling
+  sound.play().catch(e => console.log('Sound play failed:', soundType, e));
 }
-
-loadSounds();
 
 // Load custom sounds from /assets/sounds/
 async function loadCustomSounds() {
@@ -221,33 +279,136 @@ async function loadCustomSounds() {
   console.log(`Loaded ${Object.keys(sounds.custom).length} custom sound groups`);
 }
 
-// Play random sound from a folder with pitch variation
-function playRandomSound(soundName, volume = 0.6, minPitch = 0.9, maxPitch = 1.1) {
-  let soundToPlay = sounds.custom[soundName];
-  if (!soundToPlay) return;
+// Play random sound with 3D positional audio support
+function playRandomSound(soundName, volume = 0.6, minPitch = 0.9, maxPitch = 1.1, sourceX = null, sourceY = null) {
+  // Map sound names to USER'S EXACT specifications
+  const soundMapping = {
+    'attack': 'attack_slash',     // sword slash folder when attacking
+    'shield_hit': 'shield_block', // shield hit folder when blocked hit  
+    'jump': 'jump',               // woosh folder for jumps/double jumps
+    'death': 'death',             // death folder when any player dies
+    'hit': 'hit',                 // hit folder for regular hits
+    'footsteps': 'footsteps',     // footsteps folder
+    // Legacy support
+    'woosh': 'jump',
+    'shield': 'shield_block'
+  };
   
-  // If it's an array (folder with variations), pick random one
-  if (Array.isArray(soundToPlay)) {
-    const randomIndex = Math.floor(Math.random() * soundToPlay.length);
-    soundToPlay = soundToPlay[randomIndex];
+  const mappedSoundName = soundMapping[soundName] || soundName;
+  const soundArray = sounds[mappedSoundName];
+  
+  if (!soundArray || soundArray.length === 0) {
+    console.log(`Sound not found: ${soundName} (mapped to ${mappedSoundName})`);
+    return;
   }
   
-  // Clone and play with random pitch
-  const clone = soundToPlay.cloneNode();
-  clone.volume = volume;
-  clone.playbackRate = minPitch + Math.random() * (maxPitch - minPitch);
-  clone.play().catch(e => console.log('Sound play failed:', e));
+  // Pick random sound from array
+  const randomSound = soundArray[Math.floor(Math.random() * soundArray.length)];
+  const sound = randomSound.cloneNode();
+  
+  sound.volume = volume;
+  sound.playbackRate = minPitch + Math.random() * (maxPitch - minPitch);
+  
+  // Apply 3D positional audio if source position provided
+  if (sourceX !== null && sourceY !== null && myId && players[myId]) {
+    apply3DAudio(sound, sourceX, sourceY);
+  }
+  
+  sound.play().catch(e => console.log('Random sound play failed:', e));
 }
 
-// Play automatic sounds based on animation state
-function playAnimationSound(state) {
+// 3D POSITIONAL AUDIO SYSTEM
+function apply3DAudio(sound, sourceX, sourceY) {
+  const listener = players[myId];
+  if (!listener) return;
+  
+  // Calculate distance between sound source and listener
+  const dx = sourceX - listener.x;
+  const dy = sourceY - listener.y;
+  const distance = Math.sqrt(dx * dx + dy * dy);
+  
+  // 3D Audio settings
+  const maxHearingDistance = 800; // Maximum distance to hear sounds
+  const minVolume = 0.05; // Minimum volume (5%)
+  const maxVolume = 1.0; // Maximum volume multiplier
+  
+  // Calculate distance-based volume reduction
+  let volumeMultiplier = 1.0;
+  if (distance > 50) { // Start reducing volume after 50 pixels
+    volumeMultiplier = Math.max(minVolume, 1.0 - (distance - 50) / (maxHearingDistance - 50));
+  }
+  
+  // Apply volume reduction
+  const currentVolume = sound.volume;
+  sound.volume = currentVolume * volumeMultiplier;
+  
+  // Skip if too far away (save performance)
+  if (distance > maxHearingDistance) {
+    sound.volume = 0;
+    return;
+  }
+  
+  // STEREO PANNING - Create left/right audio positioning
+  try {
+    // Create audio context for advanced audio processing
+    if (!window.audioContext) {
+      window.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    
+    // Create panner node for 3D positioning
+    const source = window.audioContext.createMediaElementSource(sound);
+    const panner = window.audioContext.createStereoPanner();
+    const gainNode = window.audioContext.createGain();
+    
+    // Calculate stereo pan (-1 = left, 0 = center, 1 = right)
+    const screenWidth = canvas.width;
+    const listenerScreenX = listener.x - camera.x;
+    const sourceScreenX = sourceX - camera.x;
+    const panValue = Math.max(-1, Math.min(1, (sourceScreenX - listenerScreenX) / (screenWidth * 0.5)));
+    
+    panner.pan.value = panValue;
+    gainNode.gain.value = volumeMultiplier;
+    
+    // Connect audio nodes
+    source.connect(panner);
+    panner.connect(gainNode);
+    gainNode.connect(window.audioContext.destination);
+    
+  } catch (e) {
+    // Fallback if Web Audio API not supported
+    console.log('3D audio not supported, using distance-only volume');
+  }
+}
+
+// USER'S EXACT SPECIFICATIONS - Play sounds for specific events with 3D positioning
+function playAnimationSound(state, frame = 0, sourceX = null, sourceY = null) {
   switch(state) {
     case 'attack':
-      playRandomSound('woosh', 0.6, 0.95, 1.15);
+      // SWORD SLASH sounds when player attacks (not when hit) with 3D audio
+      if (frame <= 2) {
+        playRandomSound('attack', 0.3, 0.95, 1.15, sourceX, sourceY);
+      }
+      break;
+    case 'walk':
+    case 'run':
+      // Footstep sounds while walking (every 4th frame) with 3D audio
+      if (frame % 4 === 0) {
+        playRandomSound('footsteps', 0.3, 0.8, 1.2, sourceX, sourceY);
+      }
       break;
     case 'land':
-      playRandomSound('footsteps', 0.5, 0.8, 1.0);
+      playRandomSound('footsteps', 0.5, 0.8, 1.0, sourceX, sourceY);
       break;
+    case 'death':
+    case 'death_front':
+    case 'death_behind':
+      // DEATH sounds when any player dies with 3D audio
+      if (frame === 0) {
+        playRandomSound('death', 0.7, 0.8, 1.0, sourceX, sourceY);
+      }
+      break;
+    // Note: Shield hit sounds are handled in hit events
+    // Note: Woosh sounds are handled in jump events
   }
 }
 
@@ -388,14 +549,70 @@ async function reloadHitboxes() {
   }
 }
 
+// Prevent multiple simultaneous game starts
+let gameStarting = false;
+
+// Utility function to restore form state after errors
+function restoreFormState() {
+  gameStarting = false;
+  nameInput.disabled = false;
+  characterCards.forEach(card => {
+    card.style.pointerEvents = 'auto';
+    card.style.opacity = '1';
+  });
+  startBtn.style.display = 'block';
+  updateStartButton(); // Re-check if button should be enabled
+}
+
 async function startGame() {
-  // Hide play button immediately to prevent multiple clicks
+  // Prevent multiple simultaneous starts
+  if (gameStarting) {
+    console.log('Game start already in progress...');
+    return;
+  }
+  
+  gameStarting = true;
+  
+  // Comprehensive input validation
+  const playerName = nameInput.value.trim();
+  if (!playerName) {
+    alert('Please enter a warrior name!');
+    gameStarting = false;
+    return;
+  }
+  
+  if (playerName.length < 2) {
+    alert('Warrior name must be at least 2 characters long!');
+    gameStarting = false;
+    return;
+  }
+  
+  if (playerName.length > 20) {
+    alert('Warrior name must be 20 characters or less!');
+    gameStarting = false;
+    return;
+  }
+  
+  if (!selectedCharacter) {
+    alert('Please select a character!');
+    gameStarting = false;
+    return;
+  }
+  
+  // Disable all inputs to prevent changes during loading
+  nameInput.disabled = true;
+  characterCards.forEach(card => {
+    card.style.pointerEvents = 'none';
+    card.style.opacity = '0.6';
+  });
+  
+  // Hide play button immediately and show loading state
   startBtn.style.display = 'none';
   
-  // Create a connecting message in place of button
+  // Create enhanced loading message
   const connectingMessage = document.createElement('div');
   connectingMessage.className = 'connecting-message';
-  connectingMessage.innerHTML = '<span class="loading-spinner"></span>Connecting to server...';
+  connectingMessage.innerHTML = '<span class="loading-spinner"></span>Initializing battle systems...';
   connectingMessage.style.width = '100%';
   connectingMessage.style.textAlign = 'center';
   connectingMessage.style.padding = '18px';
@@ -421,33 +638,57 @@ async function startGame() {
     // Continue with default hitbox data
   }
   
-  // Load sprite sheets with retry mechanism
+  // Show loading screen with progress bar
+  connectingMessage.innerHTML = `
+    <div style="text-align: center;">
+      <div class="loading-spinner" style="margin-bottom: 15px;"></div>
+      <div class="loading-progress-text" style="color: #f4e4c1; font-size: 18px; margin-bottom: 10px;">Preparing battle arena...</div>
+      <div class="loading-progress-bar" style="width: 300px; height: 8px; background: rgba(139,69,19,0.3); border-radius: 4px; margin: 0 auto; overflow: hidden;">
+        <div class="loading-progress-fill" style="height: 100%; width: 0%; background: linear-gradient(90deg, #daa520, #cd7f32); transition: width 0.3s ease; border-radius: 4px;"></div>
+      </div>
+      <div style="color: #8b4513; font-size: 14px; margin-top: 8px;">Loading knight animations with optimized system...</div>
+    </div>
+  `;
+  
+  // Load sprite sheets with new optimized system
   try {
     await loadSpriteSheets();
-    console.log('✓ Sprite sheets loaded successfully');
+    console.log('✅ OPTIMIZED sprite loading successful!');
+    
+    // Final loading message
+    document.querySelector('.loading-progress-text').textContent = 'Entering battle arena...';
+    
+    // Small delay to show completion
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
   } catch (error) {
-    console.error('Critical error loading sprite sheets:', error);
-    alert('Failed to load game sprites. Please refresh the page and try again.');
-    // Restore button if there's an error
+    console.error('❌ Critical error loading sprites:', error);
+    alert('⚠️ Failed to load game assets. Please check your connection and try again.');
+    
+    // Restore form state on error
+    restoreFormState();
     connectingMessage.remove();
-    startBtn.style.display = 'block';
-    startBtn.disabled = false;
     return;
   }
   
-  // Load emojis
+  // Load emojis (optional)
   try {
     await loadEmojiImages();
   } catch (error) {
     console.warn('Warning: Could not load emoji images:', error);
   }
   
-  // Load custom sounds
+  // Load optimized numbered sounds (1.wav, 2.wav, 3.wav...)
   try {
-    await loadCustomSounds();
+    document.querySelector('.loading-progress-text').textContent = 'Loading sound effects...';
+    await loadSounds();
+    console.log('✅ OPTIMIZED numbered sound loading successful!');
   } catch (error) {
-    console.warn('Warning: Could not load custom sounds:', error);
+    console.warn('Warning: Could not load some sounds:', error);
   }
+  
+  // Skip old custom sound loading - all sounds now use numbered system
+  console.log('⏭️ Skipping legacy sound loading (all sounds now use 1.wav, 2.wav system)');
   
   // Load random background
   try {
@@ -461,13 +702,12 @@ async function startGame() {
   
   // Handle name already exists error
   socket.on('nameExists', (data) => {
-    alert(data.message);
-    console.log('Name already exists:', data.message);
+    alert(`⚠️ ${data.message}\n\nPlease choose a different warrior name.`);
+    console.log('Name conflict:', data.message);
     
-    // Remove connecting message and restore button
+    // Restore form state
+    restoreFormState();
     connectingMessage.remove();
-    startBtn.style.display = 'block';
-    startBtn.disabled = false;
     
     // Disconnect the socket
     socket.disconnect();
@@ -578,10 +818,15 @@ async function startGame() {
             delete lastPlayedFrame[key];
           }
         });
-        highestFrameSeen[trackingKey] = 0;
+        delete highestFrameSeen[trackingKey];
         
-        // Play automatic animation sounds when state changes
-        playAnimationSound(sp.state);
+        // WOOSH sound when player starts jumping (enters 'air' state) with 3D audio
+        if (sp.state === 'air' && oldState !== 'air') {
+          playRandomSound('jump', 0.4, 0.9, 1.2, sp.x, sp.y);
+        }
+        
+        // Play automatic animation sounds when state changes with 3D positioning
+        playAnimationSound(sp.state, 0, sp.x, sp.y);
       }
       
       // Check if we should play frame sounds - prevent duplicate sounds with more strict checking
@@ -590,11 +835,11 @@ async function startGame() {
         playFrameSound(sp.id, sp.character, sp.state, sp.animationFrame);
       }
       
-      // Auto-play footsteps during walk animation
+      // Auto-play footsteps during walk animation with 3D positioning
       if (sp.state === 'walk' && oldFrame !== sp.animationFrame) {
-        // Play footstep every 4 frames for natural rhythm
+        // Play footstep every 4 frames for natural rhythm with 3D audio
         if (sp.animationFrame % 4 === 0) {
-          playRandomSound('footsteps', 0.4, 0.9, 1.1);
+          playRandomSound('footsteps', 0.4, 0.9, 1.1, sp.x, sp.y);
         }
       }
     });
@@ -620,8 +865,9 @@ async function startGame() {
   socket.on('playerHit', (data) => {
     // Check if attack was blocked by shield
     if (data.blocked) {
-      // SHIELD BLOCK - Different effects!
-      playRandomSound('hit', 0.4, 1.2, 1.5); // Metallic clang sound
+      // SHIELD HIT sounds when shielded player gets hit - 3D positioned
+      const targetPlayer = players[data.targetId];
+      playRandomSound('shield_hit', 0.4, 1.2, 1.5, targetPlayer?.x, targetPlayer?.y);
       
       if (data.targetId === myId) {
         // Minimal screen shake for blocking
@@ -633,14 +879,14 @@ async function startGame() {
       }
       
       // Create blue spark particles for shield block
-      const target = players[data.targetId];
-      if (target) {
-        createShieldBlockParticles(target.x, target.y - 20, 15);
+      if (targetPlayer) {
+        createShieldBlockParticles(targetPlayer.x, targetPlayer.y - 20, 15);
       }
     } else {
-      // Normal hit
-      playSound('hurt');
-      playRandomSound('hit', 0.7, 0.9, 1.2);
+      // Normal hit - maximum 30% volume with 3D positioning
+      const hitTarget = players[data.targetId];
+      playSound('hurt', false, hitTarget?.x, hitTarget?.y);
+      playRandomSound('hit', 0.3, 0.9, 1.2, hitTarget?.x, hitTarget?.y);
       
       if (data.targetId === myId) {
         // Screen shake for being hit
@@ -675,15 +921,15 @@ async function startGame() {
   
   // Listen for corpse hit events to create blood
   socket.on('corpseHit', (data) => {
-    // Play hit sound
-    playRandomSound('hit', 0.5, 0.9, 1.2);
+    // Play hit sound - maximum 30% volume with 3D positioning
+    playRandomSound('hit', 0.3, 0.9, 1.2, data.x, data.y);
     
     // Create blood splatter particles (less than death, but still visible)
     createDeathParticles(data.x, data.y, 15); // 30 particles (15 * 2)
     
     // Small screen shake if you hit the corpse
-    const target = players[data.targetId];
-    if (target) {
+    const corpseTarget = players[data.targetId];
+    if (corpseTarget) {
       screenShake.intensity = 5;
     }
   });
@@ -730,8 +976,8 @@ async function startGame() {
         }, 1000);
       }
       
-      // Play death hurt sound
-      playSound('hurt');
+      // Play death hurt sound with 3D positioning
+      playSound('hurt', false, deadPlayer?.x, deadPlayer?.y);
       
       // Create death explosion particles
       createDeathParticles(deadPlayer.x, deadPlayer.y, 40);
@@ -824,8 +1070,12 @@ async function startGame() {
     spawnEmoji(data.playerId, data.emojiNumber);
   });
   
-  // Double jump event - create motion trail effect
+  // Double jump event - create motion trail effect + WOOSH sound
   socket.on('playerDoubleJump', (data) => {
+    // WOOSH sounds for jumps and double jumps with 3D positioning
+    const jumpPlayer = players[data.id];
+    playRandomSound('jump', 0.5, 0.9, 1.3, jumpPlayer?.x, jumpPlayer?.y);
+    
     const player = players[data.id];
     if (player) {
       // Create multiple sprite-based trails for motion blur
@@ -1221,152 +1471,195 @@ const jumpPatterns = {
   }
 };
 
+// Preloading system with progress tracking
+let loadingProgress = { loaded: 0, total: 0, currentAnimation: '' };
+let preloadCompleted = false;
+
+// Optimized sprite loading using new 1.png, 2.png... pattern
 async function loadSpriteSheets() {
-  console.log('🎮 Starting sprite sheet loading...');
+  console.log('🚀 Starting OPTIMIZED sprite loading with new naming pattern...');
   
-  // Only load knight character
   const char = 'knight';
   spriteSheets[char] = {};
   
-  // All knight animation folders
-  const knightFolders = [
-    { name: 'attack', pattern: 'attack' },
-    { name: 'death from behind', pattern: 'death from back' },
-    { name: 'death from front', pattern: 'death fron front' },
-    { name: 'idle', pattern: 'idle' },
-    { name: 'jump', pattern: null }, // Special case - numbered files
-    { name: 'run', pattern: 'run' },
-    { name: 'shield', pattern: 'shield' }
+  // Knight animation folders with expected frame counts (for faster loading)
+  const knightAnimations = [
+    { folder: 'idle', key: 'idle', maxFrames: 16 },
+    { folder: 'run', key: 'walk', maxFrames: 16 },
+    { folder: 'attack', key: 'attack', maxFrames: 10 },
+    { folder: 'shield', key: 'shield', maxFrames: 11 },
+    { folder: 'death from front', key: 'death_front', maxFrames: 16 },
+    { folder: 'death from behind', key: 'death_behind', maxFrames: 10 },
+    { folder: 'jump', key: 'jump', maxFrames: 0 } // Special case - we'll use for air/land
   ];
   
-  let totalFramesLoaded = 0;
-  let failedAnimations = [];
+  // Calculate total expected frames for progress tracking
+  loadingProgress.total = knightAnimations.reduce((sum, anim) => sum + anim.maxFrames, 0);
+  loadingProgress.loaded = 0;
   
-  for (const folder of knightFolders) {
-    const frames = [];
-    const basePath = `/assets/player sprites/knight/${folder.name}/`;
-    const animKey = folder.name.toLowerCase().replace(/ /g, '_'); // Convert to key like "death_from_back"
+  const loadPromises = [];
+  
+  for (const animation of knightAnimations) {
+    const basePath = `/assets/player sprites/knight/${animation.folder}/`;
+    loadingProgress.currentAnimation = animation.folder;
     
-    console.log(`📂 Loading knight ${folder.name} from ${basePath}...`);
+    console.log(`📂 Preloading ${animation.folder}...`);
     
-    // Special handling for jump folder (1.png, 2.png)
-    if (folder.name === 'jump') {
-      for (let i = 1; i <= 10; i++) {
-        const img = new Image();
-        try {
-          await new Promise((resolve, reject) => {
-            const timeout = setTimeout(() => reject(new Error('timeout')), 500);
-            img.onload = () => {
-              clearTimeout(timeout);
-              frames.push(img);
-              resolve();
-            };
-            img.onerror = () => {
-              clearTimeout(timeout);
-              reject(new Error('failed'));
-            };
-            img.src = basePath + `${i}.png`;
-          });
-        } catch (e) {
-          break; // Stop when we can't load more
-        }
-      }
+    if (animation.folder === 'jump') {
+      // Special handling for jump - use first frame for air, second for land
+      const airImg = new Image();
+      const landImg = new Image();
       
-      // Store jump frames as 'air' and 'land'
-      if (frames.length > 0) {
-        spriteSheets[char]['air'] = [frames[0]]; // First frame for air
-        if (frames.length > 1) {
-          spriteSheets[char]['land'] = [frames[1]]; // Second frame for land
-        }
-        totalFramesLoaded += frames.length;
-        console.log(`  ✓ Loaded ${frames.length} frames for knight jump`);
-      } else {
-        console.error(`  ❌ Failed to load any jump frames!`);
-        failedAnimations.push('jump');
-      }
+      loadPromises.push(
+        loadSingleImage(airImg, basePath + '1.png').then(() => {
+          spriteSheets[char]['air'] = [airImg];
+          updateProgress();
+        }),
+        loadSingleImage(landImg, basePath + '2.png').then(() => {
+          spriteSheets[char]['land'] = [landImg];
+          updateProgress();
+        }).catch(() => {
+          // If no second frame, use first frame for land too
+          spriteSheets[char]['land'] = [airImg];
+          updateProgress();
+        })
+      );
       continue;
     }
     
-    // Try to load ALL possible grid positions (non-sequential files)
-    const possibleFiles = [];
-    for (let r = 0; r < 10; r++) {
-      for (let c = 0; c < 10; c++) {
-        const paddedR = String(r).padStart(2, '0');
-        const paddedC = String(c).padStart(2, '0');
-        possibleFiles.push({ r, c, filename: `${folder.pattern}_r${paddedR}_c${paddedC}.png` });
-      }
-    }
+    // Load numbered frames in PARALLEL BATCHES for maximum speed (1.png, 2.png, 3.png...)
+    const frames = [];
+    const framePromises = [];
     
-    // Try loading each file, keep the ones that exist
-    for (const fileInfo of possibleFiles) {
+    // Create all image elements and load requests simultaneously
+    for (let i = 1; i <= animation.maxFrames; i++) {
       const img = new Image();
-      try {
-        await new Promise((resolve, reject) => {
-          const timeout = setTimeout(() => reject(new Error('timeout')), 500);
-          img.onload = () => {
-            clearTimeout(timeout);
-            frames.push({ img, r: fileInfo.r, c: fileInfo.c });
-            resolve();
-          };
-          img.onerror = () => {
-            clearTimeout(timeout);
-            reject(new Error('failed'));
-          };
-          img.src = basePath + fileInfo.filename;
+      const imagePath = basePath + `${i}.png`;
+      
+      // Preload image with high priority
+      const promise = loadSingleImage(img, imagePath)
+        .then(() => {
+          frames[i - 1] = img; // Maintain order
+          updateProgress();
+          return img;
+        })
+        .catch(() => {
+          console.warn(`⚠️ Frame ${i} not found for ${animation.folder}`);
+          updateProgress(); // Still count as "processed"
+          return null;
         });
-      } catch (e) {
-        // File doesn't exist, skip it
-      }
+      
+      framePromises.push(promise);
     }
     
-    // Sort frames by row then column to get correct order
-    frames.sort((a, b) => {
-      if (a.r !== b.r) return a.r - b.r;
-      return a.c - b.c;
-    });
+    // Wait for ALL frames to load in parallel (much faster than sequential)
+    const loadedFrames = await Promise.all(framePromises);
+    const validFrames = loadedFrames.filter(frame => frame !== null);
     
-    // Extract just the images from the frame objects
-    const imageFrames = frames.map(f => f.img);
-    
-    if (imageFrames.length > 0) {
-      totalFramesLoaded += imageFrames.length;
-      console.log(`  ✓ Loaded ${imageFrames.length} frames for knight ${folder.name}`);
+    if (validFrames.length > 0) {
+      spriteSheets[char][animation.key] = validFrames;
+      
+      // Also map 'death' to 'death_front' as default
+      if (animation.key === 'death_front') {
+        spriteSheets[char]['death'] = validFrames;
+      }
+      
+      // Update hitbox data with actual frame count
+      if (hitboxData[char]?.animations?.[animation.key]) {
+        hitboxData[char].animations[animation.key].frames = validFrames.length;
+      }
+      
+      console.log(`  ✅ Loaded ${validFrames.length} frames for ${animation.folder}`);
     } else {
-      console.error(`  ❌ Failed to load any frames for ${folder.name}!`);
-      failedAnimations.push(folder.name);
-    }
-    
-    // Map folder names to animation keys and update hitbox data with actual frame count
-    if (folder.name === 'run') {
-      spriteSheets[char]['walk'] = imageFrames;
-      if (hitboxData[char]?.animations?.walk) {
-        hitboxData[char].animations.walk.frames = imageFrames.length;
-      }
-    } else if (folder.name === 'death from front') {
-      spriteSheets[char]['death_front'] = imageFrames;
-      spriteSheets[char]['death'] = imageFrames; // Default death animation
-      if (hitboxData[char]?.animations?.death_front) {
-        hitboxData[char].animations.death_front.frames = imageFrames.length;
-        console.log(`  ✓ Updated death_front to ${imageFrames.length} frames`);
-      }
-    } else if (folder.name === 'death from behind') {
-      spriteSheets[char]['death_behind'] = imageFrames;
-      if (hitboxData[char]?.animations?.death_behind) {
-        hitboxData[char].animations.death_behind.frames = imageFrames.length;
-        console.log(`  ✓ Updated death_behind to ${imageFrames.length} frames`);
-      }
-    } else {
-      spriteSheets[char][folder.name] = imageFrames;
+      console.error(`  ❌ No frames loaded for ${animation.folder}!`);
     }
   }
   
-  // Final summary
-  console.log(`\n✅ Sprite loading complete!`);
-  console.log(`   Total frames loaded: ${totalFramesLoaded}`);
-  if (failedAnimations.length > 0) {
-    console.error(`   ⚠️ Failed animations: ${failedAnimations.join(', ')}`);
-  } else {
-    console.log(`   🎉 All knight animations loaded successfully!`);
+  // Wait for all animations to finish loading
+  await Promise.all(loadPromises);
+  
+  preloadCompleted = true;
+  console.log(`\n🎉 OPTIMIZED loading complete! Loaded ${loadingProgress.loaded} frames total`);
+  
+  // Update progress bar to 100%
+  updateProgressBar(100);
+}
+
+// Image cache for faster loading
+const imageCache = new Map();
+
+// RENDER.COM OPTIMIZED - Ultra-fast cached image loader
+function loadSingleImage(img, src) {
+  return new Promise((resolve, reject) => {
+    // Check cache first for instant loading
+    if (imageCache.has(src)) {
+      const cachedImg = imageCache.get(src);
+      if (cachedImg.complete && cachedImg.naturalWidth > 0) {
+        // Use cached image immediately - INSTANT!
+        img.src = cachedImg.src;
+        img.width = cachedImg.width;
+        img.height = cachedImg.height;
+        resolve(img);
+        return;
+      }
+    }
+    
+    // Timeout for slow connections (render.com optimization)
+    const timeout = setTimeout(() => {
+      reject(new Error('Image load timeout - render.com slow connection'));
+    }, 5000); // 5 second timeout for render.com
+    
+    img.onload = () => {
+      clearTimeout(timeout);
+      // Aggressive caching for render.com
+      imageCache.set(src, img);
+      resolve(img);
+    };
+    
+    img.onerror = () => {
+      clearTimeout(timeout);
+      reject(new Error(`Image load failed: ${src}`));
+    };
+    
+    // RENDER.COM OPTIMIZATIONS
+    img.crossOrigin = 'anonymous';
+    img.loading = 'eager'; // Highest priority loading
+    img.decoding = 'sync'; // Synchronous decoding for instant display
+    img.fetchPriority = 'high'; // Modern browsers - high priority fetch
+    
+    // Preload hint for better caching
+    const link = document.createElement('link');
+    link.rel = 'preload';
+    link.as = 'image';
+    link.href = src;
+    document.head.appendChild(link);
+    
+    img.src = src;
+  });
+}
+
+// Update loading progress
+function updateProgress() {
+  loadingProgress.loaded++;
+  const percent = Math.min(95, (loadingProgress.loaded / loadingProgress.total) * 100);
+  updateProgressBar(percent);
+}
+
+// Update progress bar UI
+function updateProgressBar(percent) {
+  const progressBar = document.querySelector('.loading-progress-fill');
+  const progressText = document.querySelector('.loading-progress-text');
+  
+  if (progressBar) {
+    progressBar.style.width = percent + '%';
+  }
+  
+  if (progressText) {
+    if (percent >= 100) {
+      progressText.textContent = 'Ready to battle!';
+    } else {
+      progressText.textContent = `Loading ${loadingProgress.currentAnimation}... ${Math.round(percent)}%`;
+    }
   }
 }
 
@@ -1489,6 +1782,9 @@ function gameLoop(timestamp) {
         if (p.animationTime >= frameTime) {
           p.animationTime = 0;
           p.animationFrame++;
+          
+          // PLAY SOUNDS for animation frames
+          playAnimationSound(p.state, p.animationFrame);
           
           console.log(`💀 ${p.name} death frame: ${p.animationFrame}/${animData.frames} (${p.state})`);
           
@@ -2028,6 +2324,10 @@ let devDragStart = { x: 0, y: 0 };
 let devDragEnd = { x: 0, y: 0 };
 
 const devModeBtn = document.getElementById('dev-mode-btn');
+// Hide the dev tools button
+if (devModeBtn) {
+  devModeBtn.style.display = 'none';
+}
 const devPanel = document.getElementById('dev-panel');
 const devClose = document.getElementById('dev-close');
 const devCanvas = document.getElementById('dev-canvas');
@@ -2398,12 +2698,12 @@ function updateDevSoundList() {
     const div = document.createElement('div');
     div.style.cssText = 'padding: 8px; margin: 5px 0; background: rgba(59,130,246,0.2); border-radius: 3px; border-left: 3px solid #3b82f6;';
     div.innerHTML = `
-      <div style="display: flex; justify-content: space-between; align-items: center;">
-        <div style="flex: 1;">
-          <div style="font-size: 12px; font-weight: bold;">Frame ${sound.frame + 1}: ${sound.sound}</div>
-          <div style="font-size: 10px; color: #888;">Vol: ${sound.volume || 0.6} | Pitch: ${sound.pitch || 1.0}</div>
-        </div>
-        <button onclick="deleteDevSound(${index})" style="padding: 3px 8px; font-size: 11px; background: #ef4444; border: none; border-radius: 3px; color: white; cursor: pointer;">Delete</button>
+      <div style="color: #f4e4c1; font-size: 14px; margin-bottom: 5px;">
+        Frame ${sound.frame}: <strong>${sound.sound}</strong>
+      </div>
+      <div style="color: #888; font-size: 12px;">
+        Volume: ${sound.volume || 0.6} | Pitch: ${sound.pitch || 1.0}
+        <button onclick="deleteDevSound(${index})" style="float: right; background: #dc2626; color: white; border: none; padding: 2px 6px; border-radius: 2px; cursor: pointer; font-size: 10px;">Delete</button>
       </div>
     `;
     devSoundList.appendChild(div);
