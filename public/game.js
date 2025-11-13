@@ -400,21 +400,45 @@ async function startGame() {
   try {
     const response = await fetch('/hitboxes.json');
     hitboxData = await response.json();
+    console.log('✓ Hitbox data loaded successfully');
   } catch (error) {
     console.error('Error loading hitbox data:', error);
+    // Continue with default hitbox data
   }
   
-  // Load sprite sheets
-  await loadSpriteSheets();
+  // Load sprite sheets with retry mechanism
+  try {
+    await loadSpriteSheets();
+    console.log('✓ Sprite sheets loaded successfully');
+  } catch (error) {
+    console.error('Critical error loading sprite sheets:', error);
+    alert('Failed to load game sprites. Please refresh the page and try again.');
+    startBtn.disabled = false;
+    startBtn.classList.remove('loading');
+    startBtn.innerHTML = 'Start Game';
+    return;
+  }
   
   // Load emojis
-  await loadEmojiImages();
+  try {
+    await loadEmojiImages();
+  } catch (error) {
+    console.warn('Warning: Could not load emoji images:', error);
+  }
   
   // Load custom sounds
-  await loadCustomSounds();
+  try {
+    await loadCustomSounds();
+  } catch (error) {
+    console.warn('Warning: Could not load custom sounds:', error);
+  }
   
   // Load random background
-  await loadRandomBackground();
+  try {
+    await loadRandomBackground();
+  } catch (error) {
+    console.warn('Warning: Could not load background:', error);
+  }
   
   // Connect to server
   socket = io();
@@ -1156,6 +1180,8 @@ const jumpPatterns = {
 };
 
 async function loadSpriteSheets() {
+  console.log('🎮 Starting sprite sheet loading...');
+  
   // Only load knight character
   const char = 'knight';
   spriteSheets[char] = {};
@@ -1171,12 +1197,15 @@ async function loadSpriteSheets() {
     { name: 'shield', pattern: 'shield' }
   ];
   
+  let totalFramesLoaded = 0;
+  let failedAnimations = [];
+  
   for (const folder of knightFolders) {
     const frames = [];
-    const basePath = `/assets/player sprites/Knight/${folder.name}/`;
+    const basePath = `/assets/player sprites/knight/${folder.name}/`;
     const animKey = folder.name.toLowerCase().replace(/ /g, '_'); // Convert to key like "death_from_back"
     
-    console.log(`Loading knight ${folder.name}...`);
+    console.log(`📂 Loading knight ${folder.name} from ${basePath}...`);
     
     // Special handling for jump folder (1.png, 2.png)
     if (folder.name === 'jump') {
@@ -1207,8 +1236,12 @@ async function loadSpriteSheets() {
         if (frames.length > 1) {
           spriteSheets[char]['land'] = [frames[1]]; // Second frame for land
         }
+        totalFramesLoaded += frames.length;
+        console.log(`  ✓ Loaded ${frames.length} frames for knight jump`);
+      } else {
+        console.error(`  ❌ Failed to load any jump frames!`);
+        failedAnimations.push('jump');
       }
-      console.log(`  Loaded ${frames.length} frames for knight jump`);
       continue;
     }
     
@@ -1250,10 +1283,16 @@ async function loadSpriteSheets() {
       return a.c - b.c;
     });
     
-    console.log(`  Loaded ${frames.length} frames for knight ${folder.name}`);
-    
     // Extract just the images from the frame objects
     const imageFrames = frames.map(f => f.img);
+    
+    if (imageFrames.length > 0) {
+      totalFramesLoaded += imageFrames.length;
+      console.log(`  ✓ Loaded ${imageFrames.length} frames for knight ${folder.name}`);
+    } else {
+      console.error(`  ❌ Failed to load any frames for ${folder.name}!`);
+      failedAnimations.push(folder.name);
+    }
     
     // Map folder names to animation keys and update hitbox data with actual frame count
     if (folder.name === 'run') {
@@ -1279,7 +1318,14 @@ async function loadSpriteSheets() {
     }
   }
   
-  console.log('✓ Knight sprites loaded!');
+  // Final summary
+  console.log(`\n✅ Sprite loading complete!`);
+  console.log(`   Total frames loaded: ${totalFramesLoaded}`);
+  if (failedAnimations.length > 0) {
+    console.error(`   ⚠️ Failed animations: ${failedAnimations.join(', ')}`);
+  } else {
+    console.log(`   🎉 All knight animations loaded successfully!`);
+  }
 }
 
 // Input handling
@@ -2080,7 +2126,7 @@ async function loadDevCurrentAnimation() {
   
   if (isJumpAnim) {
     // Load single PNG from jump folder
-    const basePath = `/assets/player sprites/${charName}/jump/`;
+    const basePath = `/assets/player sprites/${charName.toLowerCase()}/jump/`;
     const filename = `${spritePattern}.png`;
     const fullPath = basePath + filename;
     
@@ -2112,7 +2158,7 @@ async function loadDevCurrentAnimation() {
     }
     
     // Load sprite sheet frames for regular animations
-    const basePath = `/assets/player sprites/${charName}/${folderName}/`;
+    const basePath = `/assets/player sprites/${charName.toLowerCase()}/${folderName}/`;
     
     // Try to load ALL possible grid positions (non-sequential files)
     const possibleFiles = [];
