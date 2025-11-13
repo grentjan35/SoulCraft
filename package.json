@@ -6,7 +6,9 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node server.js",
-    "dev": "node server.js"
+    "dev": "node server.js",
+    "minify": "node public/minify.js",
+    "build": "npm run minify && npm start"
   },
   "keywords": ["game", "multiplayer", "medieval", "websocket", "socket.io"],
   "author": "",
@@ -18,6 +20,7 @@
   },
   "dependencies": {
     "express": "^5.1.0",
-    "socket.io": "^4.8.1"
+    "socket.io": "^4.8.1",
+    "terser": "^5.26.0"
   }
 }
