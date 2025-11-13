@@ -392,101 +392,27 @@ async function startGame() {
   // Hide play button immediately to prevent multiple clicks
   startBtn.style.display = 'none';
   
-  // Create a loading container with progress bar
-  const loadingContainer = document.createElement('div');
-  loadingContainer.className = 'loading-container';
-  loadingContainer.style.width = '100%';
-  loadingContainer.style.textAlign = 'center';
-  loadingContainer.style.padding = '18px';
-  loadingContainer.style.background = 'linear-gradient(135deg, #8b4513 0%, #a0522d 100%)';
-  loadingContainer.style.border = '3px solid #8b4513';
-  loadingContainer.style.borderRadius = '8px';
-  loadingContainer.style.color = '#f4e4c1';
-  loadingContainer.style.transition = 'opacity 0.5s ease-out';
-  loadingContainer.style.opacity = '1';
+  // Create a connecting message in place of button
+  const connectingMessage = document.createElement('div');
+  connectingMessage.className = 'connecting-message';
+  connectingMessage.innerHTML = '<span class="loading-spinner"></span>Connecting to server...';
+  connectingMessage.style.width = '100%';
+  connectingMessage.style.textAlign = 'center';
+  connectingMessage.style.padding = '18px';
+  connectingMessage.style.background = 'linear-gradient(135deg, #8b4513 0%, #a0522d 100%)';
+  connectingMessage.style.border = '3px solid #8b4513';
+  connectingMessage.style.borderRadius = '8px';
+  connectingMessage.style.color = '#f4e4c1';
+  connectingMessage.style.fontSize = '24px';
+  connectingMessage.style.fontWeight = '900';
+  connectingMessage.style.fontFamily = '\'Cinzel\', serif';
+  startBtn.parentNode.appendChild(connectingMessage);
   
-  // Title
-  const loadingTitle = document.createElement('div');
-  loadingTitle.className = 'loading-title';
-  loadingTitle.textContent = 'Preparing Your Battle';
-  loadingTitle.style.fontSize = '24px';
-  loadingTitle.style.fontWeight = '900';
-  loadingTitle.style.fontFamily = '\'Cinzel\', serif';
-  loadingTitle.style.marginBottom = '15px';
-  
-  // Status message
-  const loadingStatus = document.createElement('div');
-  loadingStatus.className = 'loading-status';
-  loadingStatus.textContent = 'Loading essential game assets...';
-  loadingStatus.style.fontSize = '16px';
-  loadingStatus.style.marginBottom = '15px';
-  loadingStatus.style.fontFamily = '\'MedievalSharp\', serif';
-  
-  // Progress bar container
-  const progressBarContainer = document.createElement('div');
-  progressBarContainer.style.width = '100%';
-  progressBarContainer.style.height = '20px';
-  progressBarContainer.style.backgroundColor = 'rgba(0,0,0,0.4)';
-  progressBarContainer.style.borderRadius = '10px';
-  progressBarContainer.style.overflow = 'hidden';
-  progressBarContainer.style.marginBottom = '10px';
-  progressBarContainer.style.border = '1px solid #daa520';
-  
-  // Progress bar
-  const progressBar = document.createElement('div');
-  progressBar.style.width = '0%';
-  progressBar.style.height = '100%';
-  progressBar.style.backgroundColor = '#daa520';
-  progressBar.style.transition = 'width 0.3s';
-  
-  // Percentage indicator
-  const progressPercentage = document.createElement('div');
-  progressPercentage.textContent = '0%';
-  progressPercentage.style.fontSize = '14px';
-  progressPercentage.style.marginTop = '5px';
-  
-  // Animated spinner
-  const spinner = document.createElement('span');
-  spinner.className = 'loading-spinner';
-  spinner.style.display = 'inline-block';
-  spinner.style.marginRight = '10px';
-  
-  // Assemble the loading UI
-  progressBarContainer.appendChild(progressBar);
-  loadingContainer.appendChild(loadingTitle);
-  loadingContainer.appendChild(loadingStatus);
-  loadingContainer.appendChild(progressBarContainer);
-  loadingContainer.appendChild(progressPercentage);
-  
-  startBtn.parentNode.appendChild(loadingContainer);
-  
-  // Initialize game data
   myName = nameInput.value.trim();
   myCharacter = selectedCharacter;
   
-  // Start background rendering to show a preview while loading
-  initGamePreview(loadingContainer);
-  
-  // Set up progress tracking
-  loadingProgress.updateCallback = (percent, loaded, total) => {
-    progressBar.style.width = `${percent}%`;
-    progressPercentage.textContent = `${percent}% (${loaded}/${total} assets)`;
-    
-    // Update status messages based on progress
-    if (percent < 30) {
-      loadingStatus.textContent = 'Loading essential animations...';
-    } else if (percent < 60) {
-      loadingStatus.textContent = 'Preparing battle effects...';
-    } else if (percent < 90) {
-      loadingStatus.textContent = 'Sharpening weapons...';
-    } else {
-      loadingStatus.textContent = 'Almost ready for battle!';
-    }
-  };
-  
-  // Load hitbox data first
+  // Load hitbox data
   try {
-    loadingStatus.textContent = 'Loading game physics data...';
     const response = await fetch('/hitboxes.json');
     hitboxData = await response.json();
     console.log('✓ Hitbox data loaded successfully');
@@ -495,7 +421,7 @@ async function startGame() {
     // Continue with default hitbox data
   }
   
-  // Load sprite sheets with progress updates
+  // Load sprite sheets with retry mechanism
   try {
     await loadSpriteSheets();
     console.log('✓ Sprite sheets loaded successfully');
@@ -503,7 +429,7 @@ async function startGame() {
     console.error('Critical error loading sprite sheets:', error);
     alert('Failed to load game sprites. Please refresh the page and try again.');
     // Restore button if there's an error
-    loadingContainer.remove();
+    connectingMessage.remove();
     startBtn.style.display = 'block';
     startBtn.disabled = false;
     return;
@@ -533,24 +459,13 @@ async function startGame() {
   // Connect to server
   socket = io();
   
-  // Update loading status
-  loadingStatus.textContent = 'Connecting to server...';
-  
-  // Set up all socket event handlers
-  setupSocketHandlers(loadingContainer);
-  
-  
-}
-
-// Set up all socket event handlers in one place
-function setupSocketHandlers(loadingContainer) {
   // Handle name already exists error
   socket.on('nameExists', (data) => {
     alert(data.message);
     console.log('Name already exists:', data.message);
     
-    // Remove loading container and restore button
-    loadingContainer.remove();
+    // Remove connecting message and restore button
+    connectingMessage.remove();
     startBtn.style.display = 'block';
     startBtn.disabled = false;
     
@@ -576,12 +491,6 @@ function setupSocketHandlers(loadingContainer) {
     // Initialize atmospheric effects
     initDustParticles();
     
-    // Hide the loading container if it exists
-    loadingContainer.style.opacity = '0';
-    setTimeout(() => {
-      loadingContainer.remove();
-    }, 500);
-    
     requestAnimationFrame(gameLoop);
   });
   
@@ -601,456 +510,6 @@ function setupSocketHandlers(loadingContainer) {
   socket.on('playerLeft', (data) => {
     delete players[data.id];
   });
-  
-  // State updates
-  socket.on('state', (state) => {
-    state.players.forEach(sp => {
-      const oldFrame = players[sp.id]?.animationFrame;
-      const oldState = players[sp.id]?.state;
-      const existingPlayer = players[sp.id];
-      
-      // If player is dying on client (even if animation complete), DON'T override their death state
-      if (existingPlayer && existingPlayer.isDying) {
-        // Only update position and non-animation properties
-        existingPlayer.x = sp.x;
-        existingPlayer.y = sp.y;
-        existingPlayer.hp = sp.hp;
-        existingPlayer.kills = sp.kills;
-        existingPlayer.invincible = sp.invincible;
-        existingPlayer.invincibleTime = sp.invincibleTime;
-        existingPlayer.alive = sp.alive;
-        // Update facingRight so it's correct when respawning
-        existingPlayer.facingRight = sp.facingRight;
-        // DON'T update: state, animationFrame, animationTime, isDying
-        // Keep client's death animation state completely protected
-        return; // Skip rest of processing for dying players
-      }
-      
-      if (players[sp.id]) {
-        // Store old animation frame before updating
-        const previousFrame = players[sp.id].animationFrame;
-        
-        // Fix for attack animation running twice: prevent frame jumps in attack animation
-        if (sp.state === 'attack' && oldState === 'attack') {
-          // Only allow frame to increase by at most 1 from previous frame
-          if (sp.animationFrame > previousFrame + 1) {
-            sp.animationFrame = previousFrame + 1;
-          }
-        }
-        
-        Object.assign(players[sp.id], sp);
-      } else {
-        players[sp.id] = sp;
-      }
-      
-      // Detect animation loop - if frame went backwards, clear sound tracking (skip for death animations)
-      if (!sp.state.includes('death')) {
-        const trackingKey = `${sp.id}_${sp.state}`;
-        const lastHighest = highestFrameSeen[trackingKey] || 0;
-        
-        if (sp.animationFrame < lastHighest) {
-          // Animation looped! Clear all sound timestamps for this animation
-          console.log(`🔄 Animation loop detected for ${sp.state}: frame ${lastHighest} → ${sp.animationFrame}`);
-          Object.keys(lastPlayedFrame).forEach(key => {
-            if (key.startsWith(`${sp.id}_${sp.state}_`)) {
-              delete lastPlayedFrame[key];
-            }
-          });
-          highestFrameSeen[trackingKey] = sp.animationFrame;
-        } else {
-          highestFrameSeen[trackingKey] = Math.max(lastHighest, sp.animationFrame);
-        }
-      }
-      
-      // Clear tracking when animation changes
-      if (oldState !== sp.state) {
-        const trackingKey = `${sp.id}_${sp.state}`;
-        Object.keys(lastPlayedFrame).forEach(key => {
-          if (key.startsWith(`${sp.id}_`)) {
-            delete lastPlayedFrame[key];
-          }
-        });
-        highestFrameSeen[trackingKey] = 0;
-        
-        // Play automatic animation sounds when state changes
-        playAnimationSound(sp.state);
-      }
-      
-      // Check if we should play frame sounds - prevent duplicate sounds with more strict checking
-      if ((oldFrame !== sp.animationFrame || oldState !== sp.state) && 
-          (sp.state !== 'attack' || !lastPlayedFrame[`${sp.id}_${sp.state}_${sp.animationFrame}`])) {
-        playFrameSound(sp.id, sp.character, sp.state, sp.animationFrame);
-      }
-      
-      // Auto-play footsteps during walk animation
-      if (sp.state === 'walk' && oldFrame !== sp.animationFrame) {
-        // Play footstep every 4 frames for natural rhythm
-        if (sp.animationFrame % 4 === 0) {
-          playRandomSound('footsteps', 0.4, 0.9, 1.1);
-        }
-      }
-    });
-    
-    // Update HUD
-    if (players[myId]) {
-      const hpPercent = (players[myId].hp / players[myId].maxHp) * 100;
-      hpBar.style.width = hpPercent + '%';
-      
-      if (hpPercent > 60) {
-        hpBar.style.background = 'linear-gradient(90deg, #8b0000 0%, #dc143c 100%)';
-      } else if (hpPercent > 30) {
-        hpBar.style.background = 'linear-gradient(90deg, #ff4500 0%, #ff6347 100%)';
-      } else {
-        hpBar.style.background = 'linear-gradient(90deg, #8b0000 0%, #b22222 100%)';
-      }
-    }
-    
-    playerCountEl.textContent = `Players: ${Object.keys(players).length}`;
-  });
-  
-  // Listen for hit events to create effects
-  socket.on('playerHit', (data) => {
-    // Check if attack was blocked by shield
-    if (data.blocked) {
-      // SHIELD BLOCK - Different effects!
-      playRandomSound('hit', 0.4, 1.2, 1.5); // Metallic clang sound
-      
-      if (data.targetId === myId) {
-        // Minimal screen shake for blocking
-        screenShake.intensity = 5;
-        flashEffect.alpha = 0.1; // Blue flash for block
-      } else if (data.attackerId === myId) {
-        // Feedback for attacker - attack was blocked!
-        screenShake.intensity = 3;
-      }
-      
-      // Create blue spark particles for shield block
-      const target = players[data.targetId];
-      if (target) {
-        createShieldBlockParticles(target.x, target.y - 20, 15);
-      }
-    } else {
-      // Normal hit
-      playSound('hurt');
-      playRandomSound('hit', 0.7, 0.9, 1.2);
-      
-      if (data.targetId === myId) {
-        // Screen shake for being hit
-        screenShake.intensity = 15;
-        flashEffect.alpha = 0.4;
-      } else if (data.attackerId === myId) {
-        // Small shake for hitting someone
-        screenShake.intensity = 8;
-      }
-      
-      // Create impact particles
-      const target = players[data.targetId];
-      if (target) {
-        createImpactParticles(target.x, target.y - 20, 20);
-      }
-    }
-  });
-  
-  // Listen for shield block events
-  socket.on('shieldBlock', (data) => {
-    const defender = players[data.defenderId];
-    if (defender) {
-      // Create extra shield block particles for emphasis
-      createShieldBlockParticles(data.x, data.y - 20, 20);
-      
-      // Screen shake for dramatic effect
-      shakeScreen(8, 0.2);
-      
-      console.log(`🛡️ SHIELD BLOCK! ${defender.name} blocked an attack!`);
-    }
-  });
-  
-  // Listen for corpse hit events to create blood
-  socket.on('corpseHit', (data) => {
-    // Play hit sound
-    playRandomSound('hit', 0.5, 0.9, 1.2);
-    
-    // Create blood splatter particles (less than death, but still visible)
-    createDeathParticles(data.x, data.y, 15); // 30 particles (15 * 2)
-    
-    // Small screen shake if you hit the corpse
-    const target = players[data.targetId];
-    if (target) {
-      screenShake.intensity = 5;
-    }
-  });
-  
-  socket.on('playerDied', (data) => {
-    console.log('💀 Player died event:', data);
-    const deadPlayer = players[data.id];
-    const killer = players[data.killer];
-    console.log('💀 Dead player:', deadPlayer?.name, 'Killer:', killer?.name);
-    
-    if (deadPlayer) {
-      // Set death animation based on hit direction
-      deadPlayer.state = data.deathType || 'death_front';
-      deadPlayer.animationFrame = 0;
-      deadPlayer.animationTime = 0;
-      deadPlayer.isDying = true; // Flag to show death animation
-      deadPlayer.deathAnimationComplete = false; // Animation not finished yet
-      
-      console.log(`💀 ${deadPlayer.name} starting death animation: ${deadPlayer.state}`);
-      
-      // If it's me who died, show gloomy death screen
-      if (data.id === myId) {
-        currentInput.left = false;
-        currentInput.right = false;
-        currentInput.attack = false;
-        currentInput.jump = false;
-        
-        // Show death screen with gloomy overlay
-        deathScreen.style.display = 'flex';
-        killerNameEl.textContent = killer?.name || 'Unknown';
-        respawnBtn.disabled = true;
-        respawnBtn.style.opacity = '0.5';
-        respawnBtn.style.cursor = 'not-allowed';
-        
-        // Random countdown 3-7 seconds
-        let countdown = Math.floor(3 + Math.random() * 5); // 3-7 seconds
-        respawnCountdownEl.textContent = countdown;
-        const countdownInterval = setInterval(() => {
-          countdown--;
-          respawnCountdownEl.textContent = Math.max(0, countdown);
-          if (countdown <= 0) {
-            clearInterval(countdownInterval);
-          }
-        }, 1000);
-      }
-      
-      // Play death hurt sound
-      playSound('hurt');
-      
-      // Create death explosion particles
-      createDeathParticles(deadPlayer.x, deadPlayer.y, 40);
-      screenShake.intensity = 25;
-      flashEffect.alpha = 0.6;
-    }
-    
-    // Show kill message - EVERYONE SEES IT
-    if (killer && deadPlayer) {
-      console.log('⚔️ Creating kill message!');
-      const killMsg = document.createElement('div');
-      killMsg.className = 'kill-message';
-      
-      // Personalized messages based on involvement
-      if (data.id === myId) {
-        // You died
-        killMsg.innerHTML = `<span style="color: #ff4444;">☠️ You were slain by <span style="color: #daa520;">${killer.name}</span></span>`;
-        console.log('⚔️ You died message');
-      } else if (data.killer === myId) {
-        // You killed someone
-        killMsg.innerHTML = `<span style="color: #44ff44;">⚔️ You slew <span style="color: #daa520;">${deadPlayer.name}</span>!</span>`;
-        console.log('⚔️ You killed message');
-      } else {
-        // Someone else killed someone else - EVERYONE SEES THIS
-        killMsg.innerHTML = `<span style="color: #f4e4c1;">⚔️ <span style="color: #daa520;">${killer.name}</span> slew <span style="color: #daa520;">${deadPlayer.name}</span></span>`;
-        console.log('⚔️ Kill message (spectator view)');
-      }
-      
-      console.log('⚔️ Appending to chat:', chatMessages);
-      chatMessages.appendChild(killMsg);
-      chatMessages.scrollTop = chatMessages.scrollHeight;
-      console.log('⚔️ Kill message added!');
-      
-      // Remove after 8 seconds (longer so people can see)
-      setTimeout(() => killMsg.remove(), 8000);
-    } else {
-      console.log('⚠️ No kill message - killer or deadPlayer missing');
-    }
-    
-  });
-  
-  socket.on('canRespawn', (data) => {
-    if (data.id === myId) {
-      // Enable respawn button
-      respawnBtn.disabled = false;
-      respawnBtn.style.opacity = '1';
-      respawnBtn.style.cursor = 'pointer';
-      respawnTimerEl.textContent = 'You may now respawn';
-    }
-  });
-  
-  socket.on('playerRespawned', (data) => {
-    // Player respawned - hide death screen if it's me
-    if (data.id === myId) {
-      deathScreen.style.display = 'none';
-      
-      // Reset input state to prevent stuck controls
-      currentInput.left = false;
-      currentInput.right = false;
-      currentInput.attack = false;
-      currentInput.jump = false;
-    }
-    
-    // Clear death flags for respawned player
-    if (players[data.id]) {
-      players[data.id].isDying = false;
-      players[data.id].deathAnimationComplete = false;
-      players[data.id].isCorpse = false;
-      console.log(`✨ ${players[data.id].name} respawned!`);
-    }
-  });
-  
-  // Chat messages
-  socket.on('chatMessage', (data) => {
-    // Play chat sound (no pitch variation)
-    playSound('chat');
-    
-    addChatMessage(data.name, data.message, data.id === myId);
-  });
-  
-  // Emoji events
-  socket.on('emoji', (data) => {
-    spawnEmoji(data.playerId, data.emojiNumber);
-  });
-  
-  // Double jump event - create motion trail effect
-  socket.on('playerDoubleJump', (data) => {
-    const player = players[data.id];
-    if (player) {
-      // Create multiple sprite-based trails for motion blur
-      for (let i = 0; i < 8; i++) {
-        setTimeout(() => {
-          const p = players[data.id];
-          if (p) {
-            motionTrails.push({
-              x: p.x,
-              y: p.y,
-              character: p.character,
-              state: p.state,
-              animationFrame: p.animationFrame,
-              facingRight: p.facingRight,
-              life: 0.25,
-              maxLife: 0.25
-            });
-          }
-        }, i * 25); // Stagger trails
-      }
-    }
-  });
-}
-
-// Create a nice background animation during loading
-function initGamePreview(loadingContainer) {
-  // Create a small canvas for the preview
-  const previewCanvas = document.createElement('canvas');
-  previewCanvas.width = 300;
-  previewCanvas.height = 150;
-  previewCanvas.style.marginTop = '20px';
-  previewCanvas.style.border = '2px solid #8b4513';
-  previewCanvas.style.borderRadius = '5px';
-  previewCanvas.style.boxShadow = '0 0 20px rgba(0,0,0,0.5)';
-  
-  // Add the canvas to the loading container
-  loadingContainer.appendChild(previewCanvas);
-  
-  const ctx = previewCanvas.getContext('2d');
-  ctx.imageSmoothingEnabled = false;
-  
-  // Create a temporary knight sprite that moves back and forth
-  const knightImg = new Image();
-  knightImg.src = 'assets/player sprites/knight/idle/idle_r00_c00.png';
-  
-  // Create some stars for the background
-  const stars = [];
-  for (let i = 0; i < 30; i++) {
-    stars.push({
-      x: Math.random() * previewCanvas.width,
-      y: Math.random() * previewCanvas.height,
-      size: Math.random() * 2 + 1,
-      speed: Math.random() * 0.5 + 0.1
-    });
-  }
-  
-  // Knight animation state
-  const knight = {
-    x: 50,
-    y: 100,
-    direction: 1,
-    frame: 0,
-    frameTime: 0,
-    scale: 2
-  };
-  
-  // Animation loop
-  let lastTime = performance.now();
-  let animationActive = true;
-  
-  function animate() {
-    if (!animationActive) return;
-    
-    const now = performance.now();
-    const dt = (now - lastTime) / 1000;
-    lastTime = now;
-    
-    // Clear canvas
-    ctx.clearRect(0, 0, previewCanvas.width, previewCanvas.height);
-    
-    // Draw stars
-    ctx.fillStyle = '#f4e4c1';
-    for (const star of stars) {
-      star.x -= star.speed;
-      if (star.x < 0) {
-        star.x = previewCanvas.width;
-        star.y = Math.random() * previewCanvas.height;
-      }
-      ctx.beginPath();
-      ctx.arc(star.x, star.y, star.size, 0, Math.PI * 2);
-      ctx.fill();
-    }
-    
-    // Draw ground
-    ctx.fillStyle = '#8b4513';
-    ctx.fillRect(0, 120, previewCanvas.width, 30);
-    
-    // Update and draw knight
-    knight.x += knight.direction * 30 * dt;
-    if (knight.x > previewCanvas.width - 30) {
-      knight.direction = -1;
-    } else if (knight.x < 30) {
-      knight.direction = 1;
-    }
-    
-    // Animate frame
-    knight.frameTime += dt;
-    if (knight.frameTime > 0.15) {
-      knight.frame = (knight.frame + 1) % 4;
-      knight.frameTime = 0;
-    }
-    
-    // Draw knight if image loaded
-    if (knightImg.complete) {
-      const flipX = knight.direction < 0;
-      const drawX = flipX ? knight.x + 20 : knight.x - 20;
-      
-      ctx.save();
-      if (flipX) {
-        ctx.scale(-1, 1);
-        ctx.drawImage(knightImg, -drawX, knight.y - 30, 40, 40);
-      } else {
-        ctx.drawImage(knightImg, drawX, knight.y - 30, 40, 40);
-      }
-      ctx.restore();
-    }
-    
-    requestAnimationFrame(animate);
-  }
-  
-  // Start animation
-  animate();
-  
-  // Stop the animation when the game starts
-  return {
-    stop: () => {
-      animationActive = false;
-    }
-  };
-}
   
   socket.on('state', (state) => {
     state.players.forEach(sp => {
@@ -1762,232 +1221,122 @@ const jumpPatterns = {
   }
 };
 
-// Global loading progress tracking
-let loadingProgress = {
-  total: 0,
-  loaded: 0,
-  failed: 0,
-  updateCallback: null
-};
-
-function updateLoadingProgress(value, total) {
-  loadingProgress.loaded = value;
-  if (total) loadingProgress.total = total;
-  
-  const percent = Math.floor((loadingProgress.loaded / loadingProgress.total) * 100);
-  
-  if (loadingProgress.updateCallback) {
-    loadingProgress.updateCallback(percent, loadingProgress.loaded, loadingProgress.total);
-  }
-}
-
 async function loadSpriteSheets() {
   console.log('🎮 Starting sprite sheet loading...');
   
-  // Only load knight character - essential animations first
+  // Only load knight character
   const char = 'knight';
   spriteSheets[char] = {};
   
-  // Separate essential from non-essential animations
-  const essentialFolders = [
-    { name: 'idle', pattern: 'idle', maxFrames: 10 },
-    { name: 'run', pattern: 'run', maxFrames: 10 },
-    { name: 'attack', pattern: 'attack', maxFrames: 10 }
+  // All knight animation folders
+  const knightFolders = [
+    { name: 'attack', pattern: 'attack' },
+    { name: 'death from behind', pattern: 'death from back' },
+    { name: 'death from front', pattern: 'death fron front' },
+    { name: 'idle', pattern: 'idle' },
+    { name: 'jump', pattern: null }, // Special case - numbered files
+    { name: 'run', pattern: 'run' },
+    { name: 'shield', pattern: 'shield' }
   ];
-  
-  const nonEssentialFolders = [
-    { name: 'jump', pattern: null, maxFrames: 5 },
-    { name: 'shield', pattern: 'shield', maxFrames: 10 },
-    { name: 'death from front', pattern: 'death fron front', maxFrames: 10 },
-    { name: 'death from behind', pattern: 'death from back', maxFrames: 10 }
-  ];
-  
-  // Calculate total expected frames for progress bar
-  const expectedTotalFrames = essentialFolders.reduce((sum, f) => sum + f.maxFrames, 0) + 
-                             nonEssentialFolders.reduce((sum, f) => sum + f.maxFrames, 0);
-  
-  loadingProgress.total = expectedTotalFrames;
-  loadingProgress.loaded = 0;
-  loadingProgress.failed = 0;
   
   let totalFramesLoaded = 0;
   let failedAnimations = [];
   
-  // Load essential animations first (in parallel for speed)
-  const essentialPromises = essentialFolders.map(folder => loadAnimationFrames(folder, char));
-  const essentialResults = await Promise.all(essentialPromises);
-  
-  essentialResults.forEach(result => {
-    if (result.success) {
-      totalFramesLoaded += result.frames.length;
-    } else {
-      failedAnimations.push(result.name);
-    }
-  });
-  
-  // Only load non-essential animations after essential ones are done
-  const nonEssentialPromises = nonEssentialFolders.map(folder => loadAnimationFrames(folder, char));
-  const nonEssentialResults = await Promise.all(nonEssentialPromises);
-  
-  nonEssentialResults.forEach(result => {
-    if (result.success) {
-      totalFramesLoaded += result.frames.length;
-    } else {
-      failedAnimations.push(result.name);
-    }
-  });
-  
-  // Final summary
-  console.log(`\n✅ Sprite loading complete!`);
-  console.log(`   Total frames loaded: ${totalFramesLoaded}`);
-  if (failedAnimations.length > 0) {
-    console.error(`   ⚠️ Failed animations: ${failedAnimations.join(', ')}`);
-  } else {
-    console.log(`   🎉 All knight animations loaded successfully!`);
-  }
-  
-  // Set progress to 100% to ensure bar is full
-  updateLoadingProgress(loadingProgress.total);
-}
-
-async function loadAnimationFrames(folder, char) {
-  const frames = [];
-  const basePath = `/assets/player sprites/knight/${folder.name}/`;
-  
-  console.log(`📂 Loading knight ${folder.name} from ${basePath}...`);
-  
-  // Special handling for jump folder (1.png, 2.png)
-  if (folder.name === 'jump') {
-    // Jump has fewer frames, load them all at once
-    const jumpFramePromises = [];
-    for (let i = 1; i <= folder.maxFrames; i++) {
-      jumpFramePromises.push(loadSingleImage(basePath + `${i}.png`, 200));
-    }
+  for (const folder of knightFolders) {
+    const frames = [];
+    const basePath = `/assets/player sprites/knight/${folder.name}/`;
+    const animKey = folder.name.toLowerCase().replace(/ /g, '_'); // Convert to key like "death_from_back"
     
-    // Wait for all to load or fail
-    const results = await Promise.all(jumpFramePromises.map(p => p.catch(e => null)));
-    const validFrames = results.filter(img => img !== null);
+    console.log(`📂 Loading knight ${folder.name} from ${basePath}...`);
     
-    // Store jump frames as 'air' and 'land'
-    if (validFrames.length > 0) {
-      spriteSheets[char]['air'] = [validFrames[0]]; // First frame for air
-      if (validFrames.length > 1) {
-        spriteSheets[char]['land'] = [validFrames[1]]; // Second frame for land
+    // Special handling for jump folder (1.png, 2.png)
+    if (folder.name === 'jump') {
+      for (let i = 1; i <= 10; i++) {
+        const img = new Image();
+        try {
+          await new Promise((resolve, reject) => {
+            const timeout = setTimeout(() => reject(new Error('timeout')), 500);
+            img.onload = () => {
+              clearTimeout(timeout);
+              frames.push(img);
+              resolve();
+            };
+            img.onerror = () => {
+              clearTimeout(timeout);
+              reject(new Error('failed'));
+            };
+            img.src = basePath + `${i}.png`;
+          });
+        } catch (e) {
+          break; // Stop when we can't load more
+        }
       }
-      updateLoadingProgress(loadingProgress.loaded + validFrames.length);
-      console.log(`  ✓ Loaded ${validFrames.length} frames for knight jump`);
-      return { success: true, frames: validFrames, name: folder.name };
-    } else {
-      console.error(`  ❌ Failed to load any jump frames!`);
-      loadingProgress.failed += folder.maxFrames;
-      updateLoadingProgress(loadingProgress.loaded + folder.maxFrames);
-      return { success: false, frames: [], name: folder.name };
-    }
-  }
-  
-  // For regular animations, we'll check common patterns
-  // Most efficient approach: load just 10 frames instead of 100 possible combinations
-  const framesToLoad = [];
-  
-  // Determine which pattern to use
-  let pattern = folder.pattern;
-  let filenamePattern = '';
-  
-  // Fix the incorrect pattern for 'death from front'
-  if (folder.name === 'death from front') {
-    pattern = 'death from front';
-  }
-  
-  // For death animations, first check if we have r00_c00.png format
-  if (folder.name.includes('death')) {
-    const testImg = new Image();
-    try {
-      await new Promise((resolve, reject) => {
-        const timeout = setTimeout(() => reject(new Error('timeout')), 200);
-        testImg.onload = () => {
-          clearTimeout(timeout);
-          resolve();
-        };
-        testImg.onerror = () => {
-          clearTimeout(timeout);
-          reject(new Error('failed'));
-        };
-        testImg.src = `${basePath}${pattern}_r00_c00.png`;
-      });
       
-      // If this worked, use the r00_c00 pattern
-      filenamePattern = (r, c) => `${pattern}_r${String(r).padStart(2, '0')}_c${String(c).padStart(2, '0')}.png`;
-    } catch (e) {
-      // Try alternative pattern with frame numbers
-      filenamePattern = (i) => `${i+1}.png`;
-    }
-  } else {
-    // Default pattern
-    filenamePattern = (r, c) => `${pattern}_r${String(r).padStart(2, '0')}_c${String(c).padStart(2, '0')}.png`;
-  }
-  
-  // Create promises for all frames, either row-col based or sequential
-  const framePromises = [];
-  if (typeof filenamePattern === 'function' && filenamePattern.length === 2) {
-    // Row-column pattern
-    for (let r = 0; r < 2; r++) { // Limit to 2 rows max
-      for (let c = 0; c < 5; c++) { // Limit to 5 columns max
-        const filename = filenamePattern(r, c);
-        framePromises.push({
-          promise: loadSingleImage(`${basePath}${filename}`, 200),
-          r, c
-        });
-      }
-    }
-  } else {
-    // Sequential pattern (1.png, 2.png...)
-    for (let i = 0; i < folder.maxFrames; i++) {
-      const filename = (typeof filenamePattern === 'function') ? filenamePattern(i) : `${i+1}.png`;
-      framePromises.push({
-        promise: loadSingleImage(`${basePath}${filename}`, 200),
-        i
-      });
-    }
-  }
-  
-  // Wait for all frames to load or fail
-  const frameResults = [];
-  for (const framePromise of framePromises) {
-    try {
-      const img = await framePromise.promise;
-      if ('r' in framePromise && 'c' in framePromise) {
-        frameResults.push({ img, r: framePromise.r, c: framePromise.c });
+      // Store jump frames as 'air' and 'land'
+      if (frames.length > 0) {
+        spriteSheets[char]['air'] = [frames[0]]; // First frame for air
+        if (frames.length > 1) {
+          spriteSheets[char]['land'] = [frames[1]]; // Second frame for land
+        }
+        totalFramesLoaded += frames.length;
+        console.log(`  ✓ Loaded ${frames.length} frames for knight jump`);
       } else {
-        frameResults.push({ img, i: framePromise.i });
+        console.error(`  ❌ Failed to load any jump frames!`);
+        failedAnimations.push('jump');
       }
-    } catch (e) {
-      // Skip failed frames
-    } finally {
-      // Update progress after each frame attempt
-      loadingProgress.loaded++;
-      updateLoadingProgress(loadingProgress.loaded);
+      continue;
     }
-  }
-  
-  // Sort frames by position
-  if (frameResults.length > 0 && 'r' in frameResults[0]) {
-    // Sort by row then column
-    frameResults.sort((a, b) => {
+    
+    // Try to load ALL possible grid positions (non-sequential files)
+    const possibleFiles = [];
+    for (let r = 0; r < 10; r++) {
+      for (let c = 0; c < 10; c++) {
+        const paddedR = String(r).padStart(2, '0');
+        const paddedC = String(c).padStart(2, '0');
+        possibleFiles.push({ r, c, filename: `${folder.pattern}_r${paddedR}_c${paddedC}.png` });
+      }
+    }
+    
+    // Try loading each file, keep the ones that exist
+    for (const fileInfo of possibleFiles) {
+      const img = new Image();
+      try {
+        await new Promise((resolve, reject) => {
+          const timeout = setTimeout(() => reject(new Error('timeout')), 500);
+          img.onload = () => {
+            clearTimeout(timeout);
+            frames.push({ img, r: fileInfo.r, c: fileInfo.c });
+            resolve();
+          };
+          img.onerror = () => {
+            clearTimeout(timeout);
+            reject(new Error('failed'));
+          };
+          img.src = basePath + fileInfo.filename;
+        });
+      } catch (e) {
+        // File doesn't exist, skip it
+      }
+    }
+    
+    // Sort frames by row then column to get correct order
+    frames.sort((a, b) => {
       if (a.r !== b.r) return a.r - b.r;
       return a.c - b.c;
     });
-  } else {
-    // Sort by sequential index
-    frameResults.sort((a, b) => a.i - b.i);
-  }
-  
-  // Extract just the images
-  const imageFrames = frameResults.map(f => f.img);
-  
-  if (imageFrames.length > 0) {
-    console.log(`  ✓ Loaded ${imageFrames.length} frames for knight ${folder.name}`);
     
-    // Map folder names to animation keys
+    // Extract just the images from the frame objects
+    const imageFrames = frames.map(f => f.img);
+    
+    if (imageFrames.length > 0) {
+      totalFramesLoaded += imageFrames.length;
+      console.log(`  ✓ Loaded ${imageFrames.length} frames for knight ${folder.name}`);
+    } else {
+      console.error(`  ❌ Failed to load any frames for ${folder.name}!`);
+      failedAnimations.push(folder.name);
+    }
+    
+    // Map folder names to animation keys and update hitbox data with actual frame count
     if (folder.name === 'run') {
       spriteSheets[char]['walk'] = imageFrames;
       if (hitboxData[char]?.animations?.walk) {
@@ -1998,49 +1347,27 @@ async function loadAnimationFrames(folder, char) {
       spriteSheets[char]['death'] = imageFrames; // Default death animation
       if (hitboxData[char]?.animations?.death_front) {
         hitboxData[char].animations.death_front.frames = imageFrames.length;
+        console.log(`  ✓ Updated death_front to ${imageFrames.length} frames`);
       }
     } else if (folder.name === 'death from behind') {
       spriteSheets[char]['death_behind'] = imageFrames;
       if (hitboxData[char]?.animations?.death_behind) {
         hitboxData[char].animations.death_behind.frames = imageFrames.length;
+        console.log(`  ✓ Updated death_behind to ${imageFrames.length} frames`);
       }
     } else {
-      // Convert folder name to valid key
-      const key = folder.name.toLowerCase().replace(/ /g, '_');
-      spriteSheets[char][key] = imageFrames;
-      
-      // Update hitbox data with frame count
-      if (hitboxData[char]?.animations?.[key]) {
-        hitboxData[char].animations[key].frames = imageFrames.length;
-      }
+      spriteSheets[char][folder.name] = imageFrames;
     }
-    
-    return { success: true, frames: imageFrames, name: folder.name };
-  } else {
-    console.error(`  ❌ Failed to load any frames for ${folder.name}!`);
-    return { success: false, frames: [], name: folder.name };
   }
-}
-
-// Helper to load a single image with timeout
-async function loadSingleImage(src, timeout = 500) {
-  const img = new Image();
   
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error('timeout')), timeout);
-    
-    img.onload = () => {
-      clearTimeout(timer);
-      resolve(img);
-    };
-    
-    img.onerror = () => {
-      clearTimeout(timer);
-      reject(new Error('failed to load'));
-    };
-    
-    img.src = src;
-  });
+  // Final summary
+  console.log(`\n✅ Sprite loading complete!`);
+  console.log(`   Total frames loaded: ${totalFramesLoaded}`);
+  if (failedAnimations.length > 0) {
+    console.error(`   ⚠️ Failed animations: ${failedAnimations.join(', ')}`);
+  } else {
+    console.log(`   🎉 All knight animations loaded successfully!`);
+  }
 }
 
 // Input handling
