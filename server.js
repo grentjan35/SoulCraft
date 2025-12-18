@@ -9,6 +9,13 @@ const PORT = process.env.PORT || 3000;
 const TICK_RATE = 60;
 const DT = 1 / TICK_RATE;
 
+const WORLD_WIDTH = 10000;
+const WORLD_HEIGHT = 10000;
+const WORLD_MIN_X = 0;
+const WORLD_MAX_X = WORLD_WIDTH;
+const WORLD_MIN_Y = 0;
+const WORLD_MAX_Y = WORLD_HEIGHT;
+
 const app = express();
 const server = http.createServer(app);
 
@@ -143,6 +150,9 @@ function createPlayer(id, name = 'Player', character = 'spartan') {
     // Shield recoil + landing damage
     shieldRecoilArmed: false,
     shieldRecoilCooldown: 0,
+
+    lastDamagedAt: 0,
+    regenAccumulator: 0,
 
     // Shop / upgrades
     damageBonus: 0,
@@ -426,6 +436,46 @@ io.on('connection', (socket) => {
   });
 });
 
+ function killPlayer(target, killerId, deathType) {
+   if (!target || target.isDying || target.isCorpse) return;
+ 
+   target.hp = 0;
+   target.state = deathType || 'death_front';
+   target.animationFrame = 0;
+   target.animationTime = 0;
+   target.isDying = true;
+   target.isCorpse = false;
+   target.canRespawn = false;
+ 
+   target.isShielding = false;
+   target.shieldReleasing = false;
+   target.wantsToShield = false;
+   target.isShieldSlamming = false;
+   target.shieldStuckTimer = 0;
+ 
+   if (killerId && players[killerId]) {
+     players[killerId].kills++;
+   }
+ 
+   io.emit('playerDied', { id: target.id, killer: killerId || null, deathType: target.state });
+ 
+   setTimeout(() => {
+     if (players[target.id] && target.isDying) {
+       target.isCorpse = true;
+       target.vx = 0;
+       target.vy = 0;
+     }
+   }, 1300);
+ 
+   const respawnTime = 3000 + Math.random() * 4000;
+   setTimeout(() => {
+     if (players[target.id] && target.isDying) {
+       target.canRespawn = true;
+       io.emit('canRespawn', { id: target.id });
+     }
+   }, respawnTime);
+ }
+
 function updateGame(dt) {
   const GROUND_Y = 5000; // Massive world ground level
   const GRAVITY = 1200;
@@ -446,6 +496,22 @@ function updateGame(dt) {
       // Update position
       p.y += p.vy * dt;
       p.x += p.vx * dt;
+
+      const corpseXBodyHitbox = hitboxData[p.character]?.animations?.idle?.bodyHitbox;
+      const corpseXScale = hitboxData[p.character]?.gameScale || 1.0;
+      if (corpseXBodyHitbox) {
+        const leftX = p.x + corpseXBodyHitbox.x * corpseXScale;
+        const rightX = leftX + corpseXBodyHitbox.width * corpseXScale;
+        if (leftX < WORLD_MIN_X) {
+          p.x += WORLD_MIN_X - leftX;
+          p.vx = 0;
+        } else if (rightX > WORLD_MAX_X) {
+          p.x -= rightX - WORLD_MAX_X;
+          p.vx = 0;
+        }
+      } else {
+        p.x = Math.max(WORLD_MIN_X, Math.min(WORLD_MAX_X, p.x));
+      }
       
       // Ground collision - ALWAYS use idle hitbox for consistent collision
       const corpseBodyHitbox = hitboxData[p.character]?.animations?.idle?.bodyHitbox;
@@ -523,6 +589,24 @@ function updateGame(dt) {
         p.invincible = false;
         p.invincibleTime = 0;
         console.log(`Player ${p.id} invincibility force-ended (failsafe)`);
+      }
+    }
+
+    if (p.hp > 0 && p.hp < p.maxHp) {
+      const now = Date.now();
+      const lastDamagedAt = p.lastDamagedAt || 0;
+      const REGEN_DELAY_MS = 4000;
+      const REGEN_PER_SEC = 5;
+
+      if (now - lastDamagedAt >= REGEN_DELAY_MS) {
+        p.regenAccumulator = (p.regenAccumulator || 0) + dt;
+        const healAmount = Math.floor(p.regenAccumulator * REGEN_PER_SEC);
+        if (healAmount > 0) {
+          p.hp = Math.min(p.maxHp, p.hp + healAmount);
+          p.regenAccumulator -= healAmount / REGEN_PER_SEC;
+        }
+      } else {
+        p.regenAccumulator = 0;
       }
     }
     
@@ -705,6 +789,20 @@ function updateGame(dt) {
     // This prevents jittering when switching between animations with different hitbox sizes
     const bodyHitbox = hitboxData[p.character]?.animations?.idle?.bodyHitbox;
     const gameScale = hitboxData[p.character]?.gameScale || 1.0;
+
+    if (bodyHitbox) {
+      const topOffset = bodyHitbox.y * gameScale;
+      const topY = p.y + topOffset;
+      if (topY < WORLD_MIN_Y) {
+        p.y += WORLD_MIN_Y - topY;
+        if (p.vy < 0) p.vy = 0;
+      }
+    } else {
+      if (p.y < WORLD_MIN_Y) {
+        p.y = WORLD_MIN_Y;
+        if (p.vy < 0) p.vy = 0;
+      }
+    }
     
     if (bodyHitbox) {
       // Calculate feet position (bottom of body hitbox)
@@ -758,7 +856,8 @@ function updateGame(dt) {
 
         if (impactDamage > 0 && p.hp > 0) {
           p.hp -= impactDamage;
-          if (p.hp < 1) p.hp = 1;
+          p.lastDamagedAt = Date.now();
+          p.regenAccumulator = 0;
 
           io.emit('fallDamage', {
             id: p.id,
@@ -766,6 +865,10 @@ function updateGame(dt) {
             x: p.x,
             y: p.y
           });
+
+          if (p.hp <= 0) {
+            killPlayer(p, null, 'death_front');
+          }
         }
       }
       
@@ -921,8 +1024,22 @@ function updateGame(dt) {
     }
     
     p.x += p.vx * dt;
-    // NO BOUNDS - infinite scrolling world!
-    // p.x = Math.max(50, Math.min(9950, p.x)); // Removed clamping for true freedom
+
+    const xBodyHitbox = hitboxData[p.character]?.animations?.idle?.bodyHitbox;
+    const xScale = hitboxData[p.character]?.gameScale || 1.0;
+    if (xBodyHitbox) {
+      const leftX = p.x + xBodyHitbox.x * xScale;
+      const rightX = leftX + xBodyHitbox.width * xScale;
+      if (leftX < WORLD_MIN_X) {
+        p.x += WORLD_MIN_X - leftX;
+        p.vx = 0;
+      } else if (rightX > WORLD_MAX_X) {
+        p.x -= rightX - WORLD_MAX_X;
+        p.vx = 0;
+      }
+    } else {
+      p.x = Math.max(WORLD_MIN_X, Math.min(WORLD_MAX_X, p.x));
+    }
     
     // Player-to-player collision (bodies push each other) - Support multiple body hitboxes
     if (!p.isDying && !p.isCorpse) {
@@ -979,30 +1096,17 @@ function updateGame(dt) {
         }
         
         if (collisionDetected) {
-          // Push along the axis with smallest overlap
-          if (minOverlapX < minOverlapY) {
-            // Push horizontally
-            const pushDir = (p.x < other.x) ? -1 : 1;
-            const pushAmount = minOverlapX / 2;
-            p.x += pushDir * pushAmount;
-            other.x -= pushDir * pushAmount;
-            
-            // Transfer some momentum
-            const avgVx = (p.vx + other.vx) / 2;
-            p.vx = avgVx + pushDir * 50;
-            other.vx = avgVx - pushDir * 50;
-          } else {
-            // Push vertically
-            const pushDir = (p.y < other.y) ? -1 : 1;
-            const pushAmount = minOverlapY / 2;
-            p.y += pushDir * pushAmount;
-            other.y -= pushDir * pushAmount;
-            
-            // Transfer some momentum
-            const avgVy = (p.vy + other.vy) / 2;
-            p.vy = avgVy + pushDir * 50;
-            other.vy = avgVy - pushDir * 50;
-          }
+          const pushDir = (p.x < other.x) ? -1 : 1;
+          const SOFT_PUSH_CAP = 30;
+          const SOFT_PUSH_FACTOR = 0.15;
+          const softPush = Math.min(minOverlapX, SOFT_PUSH_CAP) * SOFT_PUSH_FACTOR;
+
+          p.x += pushDir * softPush;
+          other.x -= pushDir * softPush;
+
+          const avgVx = (p.vx + other.vx) / 2;
+          p.vx = avgVx;
+          other.vx = avgVx;
         }
       }
     }
@@ -1169,7 +1273,10 @@ function checkAttackHits(attacker) {
         if (canDamage) {
           const baseDamage = 10 + (attacker.damageBonus || 0);
           const finalDamage = Math.ceil(baseDamage * (1 - damageReduction)); // Apply damage reduction
+
           target.hp -= finalDamage;
+          target.lastDamagedAt = Date.now();
+          target.regenAccumulator = 0;
           
           // Emit hit event for visual effects
           io.emit('playerHit', { 
@@ -1188,48 +1295,12 @@ function checkAttackHits(attacker) {
         }
         
         if (canDamage && target.hp <= 0) {
-          target.hp = 0;
-          
-          // Determine death animation based on facing direction
-          // If attacker is facing same direction as target, hit from behind
           const hitFromBehind = attacker.facingRight === target.facingRight;
-          target.state = hitFromBehind ? 'death_behind' : 'death_front';
-          target.animationFrame = 0;
-          target.animationTime = 0;
-          target.isDying = true; // Flag for death animation
-          target.isCorpse = false; // Not a corpse yet
-          
-          // RESET SHIELD STATE ON DEATH - FIX MOVEMENT BUG!
-          target.isShielding = false;
-          target.shieldReleasing = false;
-          target.wantsToShield = false;
-          target.isShieldSlamming = false;
-          target.shieldStuckTimer = 0;
-          
+          const deathType = hitFromBehind ? 'death_behind' : 'death_front';
           console.log(`💀 Death: ${target.name} killed by ${attacker.name}`);
           console.log(`   Attacker facing: ${attacker.facingRight ? 'RIGHT' : 'LEFT'}, Target facing: ${target.facingRight ? 'RIGHT' : 'LEFT'}`);
-          console.log(`   Hit from behind: ${hitFromBehind}, Animation: ${target.state}`);
-          
-          attacker.kills++; // Increment kill count
-          io.emit('playerDied', { id: target.id, killer: attacker.id, deathType: target.state });
-          
-          // After death animation, become a pushable corpse
-          setTimeout(() => {
-            if (players[target.id] && target.isDying) {
-              target.isCorpse = true; // Now a pushable corpse
-              target.vx = 0;
-              target.vy = 0;
-            }
-          }, 1300);
-          
-          // Enable respawn after random 3-7 seconds
-          const respawnTime = 3000 + Math.random() * 4000; // 3000-7000ms
-          setTimeout(() => {
-            if (players[target.id] && target.isDying) {
-              target.canRespawn = true;
-              io.emit('canRespawn', { id: target.id });
-            }
-          }, respawnTime);
+          console.log(`   Hit from behind: ${hitFromBehind}, Animation: ${deathType}`);
+          killPlayer(target, attacker.id, deathType);
         }
         break;
       }

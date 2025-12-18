@@ -1716,12 +1716,22 @@ document.addEventListener('keydown', (e) => {
 
 function openChat() {
   chatOpen = true;
+  currentInput.left = false;
+  currentInput.right = false;
+  currentInput.attack = false;
+  currentInput.jump = false;
+  currentInput.shield = false;
   chatInput.focus(); // Focus = cursor appears |
   chatInput.select(); // Select any existing text
 }
 
 function closeChat() {
   chatOpen = false;
+  currentInput.left = false;
+  currentInput.right = false;
+  currentInput.attack = false;
+  currentInput.jump = false;
+  currentInput.shield = false;
   chatInput.blur(); // Blur = cursor disappears
   canvas.focus();
 }
@@ -2509,6 +2519,9 @@ function updateProgressBar(percent) {
 
 // Input handling
 document.addEventListener('keydown', (e) => {
+  if (chatOpen || document.activeElement === chatInput || document.activeElement === nameInput) {
+    return;
+  }
   if (e.key === 'a' || e.key === 'A' || e.key === 'ArrowLeft') {
     currentInput.left = true;
   }
@@ -2537,6 +2550,9 @@ document.addEventListener('keydown', (e) => {
 });
 
 document.addEventListener('keyup', (e) => {
+  if (chatOpen || document.activeElement === chatInput || document.activeElement === nameInput) {
+    return;
+  }
   if (e.key === 'a' || e.key === 'A' || e.key === 'ArrowLeft') {
     currentInput.left = false;
   }
@@ -2552,10 +2568,11 @@ document.addEventListener('keyup', (e) => {
   if (e.key === 's' || e.key === 'S' || e.key === 'ArrowDown') {
     currentInput.shield = false;
   }
-  if (e.key === 'h' || e.key === 'H') {
-    showHitboxes = !showHitboxes;
-    console.log('Hitboxes:', showHitboxes ? 'ON' : 'OFF');
-  }
+  // H key hitbox toggle disabled
+  // if (e.key === 'h' || e.key === 'H') {
+  //   showHitboxes = !showHitboxes;
+  //   console.log('Hitboxes:', showHitboxes ? 'ON' : 'OFF');
+  // }
 });
 
 // Mouse controls removed - Space is now attack
