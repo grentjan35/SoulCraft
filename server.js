@@ -68,7 +68,8 @@ app.post('/api/save-hitboxes', (req, res) => {
       const p = players[id];
       const charData = hitboxData[p.character];
       if (charData) {
-        p.speed = charData.speed || 200;
+        p.baseSpeed = charData.speed || 200;
+        p.speed = p.baseSpeed * (p.speedMultiplier || 1.0);
         console.log(`Updated ${p.name} (${p.character}) speed to ${p.speed}`);
       }
     }
@@ -103,6 +104,8 @@ function createPlayer(id, name = 'Player', character = 'spartan') {
     y: 4700, // SPAWN IN AIR to fall down (near world center)
     vx: 0,
     vy: 0,
+    baseSpeed: characterSpeed,
+    speedMultiplier: 1.0,
     speed: characterSpeed,
     facingRight: true,
     onGround: false, // Start in air
@@ -135,7 +138,17 @@ function createPlayer(id, name = 'Player', character = 'spartan') {
     directionChangeTime: 0,
     comboJumps: 0, // Extra jumps earned from combos
     maxComboJumps: 5, // Maximum extra jumps you can store
-    comboLevel: 0 // Tracks how many combos in a row (gets harder)
+    comboLevel: 0, // Tracks how many combos in a row (gets harder)
+
+    // Shield recoil + landing damage
+    shieldRecoilArmed: false,
+    shieldRecoilCooldown: 0,
+
+    // Shop / upgrades
+    damageBonus: 0,
+    ownedItems: {
+      santa_hat: false
+    }
   };
 }
 
@@ -192,6 +205,45 @@ io.on('connection', (socket) => {
     });
     
     console.log(`${name} joined as ${character}`);
+  });
+
+  socket.on('buyItem', (data) => {
+    const p = players[socket.id];
+    if (!p || !data || typeof data.itemId !== 'string') return;
+
+    const itemId = data.itemId;
+    if (itemId !== 'santa_hat') {
+      socket.emit('purchaseResult', { ok: false, itemId, reason: 'unknown_item' });
+      return;
+    }
+
+    const COST_KILLS = 3;
+    if (p.ownedItems?.santa_hat) {
+      socket.emit('purchaseResult', { ok: false, itemId, reason: 'already_owned' });
+      return;
+    }
+    if ((p.kills || 0) < COST_KILLS) {
+      socket.emit('purchaseResult', { ok: false, itemId, reason: 'not_enough_kills' });
+      return;
+    }
+
+    p.kills -= COST_KILLS;
+    if (!p.ownedItems) p.ownedItems = {};
+    p.ownedItems.santa_hat = true;
+
+    // Apply multiplicative speed bonus (×2) and additive damage bonus (+5)
+    p.speedMultiplier = (p.speedMultiplier || 1.0) * 2.0;
+    p.damageBonus = (p.damageBonus || 0) + 5;
+    p.speed = (p.baseSpeed || p.speed || 200) * p.speedMultiplier;
+
+    io.emit('shopUpdate', {
+      id: p.id,
+      ownedItems: p.ownedItems,
+      kills: p.kills,
+      speedMultiplier: p.speedMultiplier,
+      damageBonus: p.damageBonus
+    });
+    socket.emit('purchaseResult', { ok: true, itemId });
   });
 
   socket.on('input', (data) => {
@@ -434,9 +486,23 @@ function updateGame(dt) {
     if (p.isDying) continue;
     
     const input = p._latestInput || { left: false, right: false, attack: false, jump: false };
+
+    // Shield state invariants: if not in shield state, do NOT allow shield flags to lock movement
+    if (p.state !== 'shield' && (p.isShielding || p.shieldReleasing)) {
+      p.isShielding = false;
+      p.shieldReleasing = false;
+      p.wantsToShield = false;
+      p.shieldStuckTimer = 0;
+    }
     
     // Track previous ground state for landing detection
     const wasOnGround = p.onGround;
+
+    // Update shield recoil cooldown
+    if (p.shieldRecoilCooldown > 0) {
+      p.shieldRecoilCooldown -= dt;
+      if (p.shieldRecoilCooldown < 0) p.shieldRecoilCooldown = 0;
+    }
     
     // Update attack cooldown
     if (p.attackCooldown > 0) {
@@ -474,7 +540,7 @@ function updateGame(dt) {
     }
     
     // Handle shield (hold S to shield) - Works in AIR and GROUND!
-    if (input.shield && !p.isShielding && !p.shieldReleasing) {
+    if (input.shield && !p.isShielding) {
       // SHIELD WORKS BOTH IN AIR AND ON GROUND - same behavior
       p.isShielding = true;
       p.shieldReleasing = false;
@@ -629,6 +695,9 @@ function updateGame(dt) {
       p.vy += GRAVITY * dt;
     }
     
+    // Capture velocity before collision resolution (used for landing impact damage)
+    const preCollisionVy = p.vy;
+
     // Update Y position
     p.y += p.vy * dt;
     
@@ -668,6 +737,37 @@ function updateGame(dt) {
     if (p.onGround && !wasOnGround) {
       // Just landed
       p.isJumping = false;
+
+      // Apply landing impact damage if this landing was caused by shield recoil
+      if (p.shieldRecoilArmed) {
+        // preCollisionVy is positive when falling downward
+        const impactSpeed = Math.max(0, preCollisionVy);
+
+        // Tune: starts hurting after a decent slam, scales up, capped
+        const DAMAGE_START_SPEED = 600;
+        const DAMAGE_PER_100_SPEED = 5;
+        const MAX_IMPACT_DAMAGE = 50;
+
+        let impactDamage = 0;
+        if (impactSpeed > DAMAGE_START_SPEED) {
+          impactDamage = Math.floor(((impactSpeed - DAMAGE_START_SPEED) / 100) * DAMAGE_PER_100_SPEED);
+          if (impactDamage > MAX_IMPACT_DAMAGE) impactDamage = MAX_IMPACT_DAMAGE;
+        }
+
+        p.shieldRecoilArmed = false;
+
+        if (impactDamage > 0 && p.hp > 0) {
+          p.hp -= impactDamage;
+          if (p.hp < 1) p.hp = 1;
+
+          io.emit('fallDamage', {
+            id: p.id,
+            damage: impactDamage,
+            x: p.x,
+            y: p.y
+          });
+        }
+      }
       
       // Check if player wants to shield on landing - CONTINUE SHIELD!
       if (p.wantsToShield) {
@@ -1033,6 +1133,30 @@ function checkAttackHits(attacker) {
             }
           }
         }
+
+        // If blocked by shield: launch attacker backward/upward
+        if (isBlocked && attacker.shieldRecoilCooldown <= 0) {
+          const recoilDir = attacker.facingRight ? -1 : 1;
+          const RECOIL_VX = 500;
+          const RECOIL_VY = 800;
+
+          attacker.vx = recoilDir * RECOIL_VX;
+          attacker.vy = -RECOIL_VY;
+          attacker.onGround = false;
+          attacker.state = 'air';
+          attacker.isAttacking = false;
+          attacker.attackCooldown = Math.max(attacker.attackCooldown, 0.6);
+
+          attacker.shieldRecoilArmed = true;
+          attacker.shieldRecoilCooldown = 0.35;
+
+          io.emit('shieldRecoil', {
+            attackerId: attacker.id,
+            defenderId: target.id,
+            x: attacker.x,
+            y: attacker.y
+          });
+        }
         
         // Apply knockback (works on corpses too!)
         const knockbackForce = target.isCorpse ? 400 : (isBlocked ? 100 : 300); // Much less knockback when blocked
@@ -1043,7 +1167,7 @@ function checkAttackHits(attacker) {
         
         // Only deal damage if alive
         if (canDamage) {
-          const baseDamage = 10;
+          const baseDamage = 10 + (attacker.damageBonus || 0);
           const finalDamage = Math.ceil(baseDamage * (1 - damageReduction)); // Apply damage reduction
           target.hp -= finalDamage;
           
@@ -1134,7 +1258,12 @@ function snapshot() {
       alive: p.alive, // SEND ALIVE STATE
       isDying: p.isDying, // SEND DYING STATE
       isCorpse: p.isCorpse, // SEND CORPSE STATE
-      canRespawn: p.canRespawn // SEND RESPAWN AVAILABILITY
+      canRespawn: p.canRespawn, // SEND RESPAWN AVAILABILITY
+
+      // Shop
+      ownedItems: p.ownedItems || { santa_hat: false },
+      speedMultiplier: p.speedMultiplier || 1.0,
+      damageBonus: p.damageBonus || 0
     }))
   };
 }

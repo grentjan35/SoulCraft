@@ -4,6 +4,17 @@ let myId = null;
 let myCharacter = null;
 let myName = null;
 
+let santaHatImage = null;
+let shopUI = {
+  container: null,
+  button: null,
+  overlay: null,
+  card: null,
+  status: null,
+  buyButton: null,
+  isOpen: false
+};
+
 const canvas = document.getElementById('game-canvas');
 const ctx = canvas.getContext('2d');
 
@@ -23,6 +34,432 @@ function resizeCanvas() {
   ctx.mozImageSmoothingEnabled = false;
   ctx.webkitImageSmoothingEnabled = false;
   ctx.msImageSmoothingEnabled = false;
+}
+
+function loadShopAssets() {
+  if (santaHatImage) return;
+  santaHatImage = new Image();
+  santaHatImage.src = '/assets/store/santa%20hat.png';
+}
+
+function initShopUI() {
+  if (shopUI.container) return;
+
+  // Add CSS styles for holographic effects
+  const style = document.createElement('style');
+  style.textContent = `
+    @keyframes holographic {
+      0% { background-position: 0% 50%; }
+      50% { background-position: 100% 50%; }
+      100% { background-position: 0% 50%; }
+    }
+    
+    @keyframes shimmer {
+      0% { transform: translateX(-100%) skewX(-15deg); }
+      100% { transform: translateX(100%) skewX(-15deg); }
+    }
+    
+    @keyframes float {
+      0%, 100% { transform: translateY(0px) scale(1); }
+      50% { transform: translateY(-5px) scale(1.02); }
+    }
+    
+    @keyframes glow {
+      0%, 100% { box-shadow: 0 0 20px rgba(218, 165, 32, 0.3), 0 0 40px rgba(218, 165, 32, 0.1); }
+      50% { box-shadow: 0 0 30px rgba(218, 165, 32, 0.5), 0 0 60px rgba(218, 165, 32, 0.2); }
+    }
+    
+    .shop-button {
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      background: linear-gradient(135deg, rgba(20, 12, 8, 0.9), rgba(40, 24, 16, 0.9));
+      position: relative;
+      overflow: hidden;
+    }
+    
+    .shop-button::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: -100%;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(218, 165, 32, 0.3), transparent);
+      transition: left 0.5s;
+    }
+    
+    .shop-button:hover::before {
+      left: 100%;
+    }
+    
+    .shop-button:hover {
+      transform: translateY(-2px) scale(1.05);
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3), 0 0 15px rgba(218, 165, 32, 0.4);
+      background: linear-gradient(135deg, rgba(30, 18, 12, 0.95), rgba(50, 30, 20, 0.95));
+    }
+    
+    .shop-overlay {
+      backdrop-filter: blur(8px);
+      animation: fadeIn 0.3s ease-out;
+    }
+    
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+    
+    .shop-panel {
+      animation: slideIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+      background: linear-gradient(135deg, rgba(20, 12, 8, 0.95), rgba(30, 18, 12, 0.95));
+      position: relative;
+      overflow: hidden;
+    }
+    
+    .shop-panel::before {
+      content: '';
+      position: absolute;
+      top: -50%;
+      left: -50%;
+      width: 200%;
+      height: 200%;
+      background: linear-gradient(
+        45deg,
+        transparent 30%,
+        rgba(218, 165, 32, 0.1) 50%,
+        transparent 70%
+      );
+      animation: holographic 3s ease-in-out infinite;
+    }
+    
+    @keyframes slideIn {
+      from { 
+        opacity: 0;
+        transform: scale(0.8) translateY(-20px);
+      }
+      to { 
+        opacity: 1;
+        transform: scale(1) translateY(0);
+      }
+    }
+    
+    .shop-card {
+      background: linear-gradient(135deg, rgba(0, 0, 0, 0.4), rgba(20, 12, 8, 0.3));
+      border: 2px solid transparent;
+      background-clip: padding-box;
+      position: relative;
+      transition: all 0.3s ease;
+      animation: float 4s ease-in-out infinite;
+    }
+    
+    .shop-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: linear-gradient(45deg, #8b4513, #daa520, #8b4513);
+      border-radius: 12px;
+      padding: 2px;
+      -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+      -webkit-mask-composite: exclude;
+      mask-composite: exclude;
+      opacity: 0.8;
+    }
+    
+    .shop-card:hover {
+      transform: translateY(-5px) scale(1.02);
+      animation: glow 2s ease-in-out infinite;
+    }
+    
+    .shop-card::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: -100%;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(
+        90deg,
+        transparent,
+        rgba(255, 255, 255, 0.2),
+        transparent
+      );
+      animation: shimmer 2.5s infinite;
+    }
+    
+    .shop-hat-image {
+      transition: all 0.3s ease;
+      filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.3));
+    }
+    
+    .shop-hat-image:hover {
+      transform: rotate(5deg) scale(1.1);
+      filter: drop-shadow(0 6px 12px rgba(218, 165, 32, 0.4));
+    }
+    
+    .shop-buy-button {
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      position: relative;
+      overflow: hidden;
+      background: linear-gradient(135deg, rgba(218, 165, 32, 0.2), rgba(255, 215, 0, 0.3));
+      border: 2px solid #daa520;
+    }
+    
+    .shop-buy-button::before {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 0;
+      height: 0;
+      background: radial-gradient(circle, rgba(255, 215, 0, 0.3), transparent);
+      transition: all 0.3s ease;
+      transform: translate(-50%, -50%);
+    }
+    
+    .shop-buy-button:hover::before {
+      width: 100%;
+      height: 100%;
+    }
+    
+    .shop-buy-button:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 20px rgba(218, 165, 32, 0.4);
+      background: linear-gradient(135deg, rgba(255, 215, 0, 0.3), rgba(218, 165, 32, 0.4));
+    }
+    
+    .shop-buy-button:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none;
+    }
+    
+    .shop-close-button {
+      transition: all 0.3s ease;
+      background: rgba(139, 69, 19, 0.2);
+    }
+    
+    .shop-close-button:hover {
+      background: rgba(139, 69, 19, 0.4);
+      transform: rotate(90deg);
+    }
+  `;
+  document.head.appendChild(style);
+
+  const container = document.createElement('div');
+  container.style.position = 'fixed';
+  container.style.top = '0';
+  container.style.left = '0';
+  container.style.width = '100%';
+  container.style.pointerEvents = 'none';
+  container.style.zIndex = '9999';
+
+  const button = document.createElement('button');
+  button.textContent = 'SHOP';
+  button.className = 'shop-button';
+  button.style.position = 'absolute';
+  button.style.top = '10px';
+  button.style.left = '50%';
+  button.style.transform = 'translateX(-50%)';
+  button.style.pointerEvents = 'auto';
+  button.style.padding = '12px 24px';
+  button.style.borderRadius = '12px';
+  button.style.border = '2px solid #8b4513';
+  button.style.color = '#f4e4c1';
+  button.style.fontFamily = 'MedievalSharp, serif';
+  button.style.fontSize = '20px';
+  button.style.fontWeight = 'bold';
+  button.style.cursor = 'pointer';
+  button.style.textShadow = '0 2px 4px rgba(0, 0, 0, 0.5)';
+
+  const overlay = document.createElement('div');
+  overlay.className = 'shop-overlay';
+  overlay.style.position = 'fixed';
+  overlay.style.inset = '0';
+  overlay.style.display = 'none';
+  overlay.style.alignItems = 'center';
+  overlay.style.justifyContent = 'center';
+  overlay.style.background = 'rgba(0,0,0,0.6)';
+  overlay.style.pointerEvents = 'auto';
+  overlay.style.zIndex = '9998';
+
+  const panel = document.createElement('div');
+  panel.className = 'shop-panel';
+  panel.style.width = '420px';
+  panel.style.maxWidth = '92vw';
+  panel.style.border = '2px solid #8b4513';
+  panel.style.borderRadius = '14px';
+  panel.style.color = '#f4e4c1';
+  panel.style.boxShadow = '0 16px 60px rgba(0,0,0,0.5)';
+  panel.style.padding = '16px';
+  panel.style.fontFamily = 'MedievalSharp, serif';
+  panel.style.position = 'relative';
+  panel.style.zIndex = '1';
+
+  const header = document.createElement('div');
+  header.style.display = 'flex';
+  header.style.alignItems = 'center';
+  header.style.justifyContent = 'space-between';
+  header.style.position = 'relative';
+  header.style.zIndex = '2';
+
+  const title = document.createElement('div');
+  title.textContent = 'SHOP';
+  title.style.fontSize = '24px';
+  title.style.letterSpacing = '2px';
+  title.style.fontWeight = 'bold';
+  title.style.textShadow = '0 3px 6px rgba(0, 0, 0, 0.7)';
+
+  const close = document.createElement('button');
+  close.className = 'shop-close-button';
+  close.textContent = 'X';
+  close.style.pointerEvents = 'auto';
+  close.style.border = '2px solid #8b4513';
+  close.style.color = '#f4e4c1';
+  close.style.borderRadius = '10px';
+  close.style.width = '40px';
+  close.style.height = '36px';
+  close.style.cursor = 'pointer';
+  close.style.fontSize = '16px';
+  close.style.fontWeight = 'bold';
+
+  const card = document.createElement('div');
+  card.className = 'shop-card';
+  card.style.marginTop = '14px';
+  card.style.borderRadius = '12px';
+  card.style.padding = '14px';
+  card.style.position = 'relative';
+  card.style.zIndex = '2';
+
+  // Santa Hat image container
+  const imageContainer = document.createElement('div');
+  imageContainer.style.display = 'flex';
+  imageContainer.style.justifyContent = 'center';
+  imageContainer.style.marginBottom = '12px';
+
+  const hatImg = document.createElement('img');
+  hatImg.className = 'shop-hat-image';
+  hatImg.src = '/assets/store/santa%20hat.png';
+  hatImg.style.width = '80px';
+  hatImg.style.height = '80px';
+  hatImg.style.objectFit = 'contain';
+  hatImg.style.imageRendering = 'pixelated';
+  hatImg.style.border = '2px solid rgba(218,165,32,0.4)';
+  hatImg.style.borderRadius = '8px';
+  hatImg.style.background = 'rgba(0,0,0,0.2)';
+  hatImg.style.padding = '4px';
+
+  imageContainer.appendChild(hatImg);
+
+  const itemName = document.createElement('div');
+  itemName.textContent = 'Santa Hat';
+  itemName.style.fontSize = '20px';
+  itemName.style.fontWeight = 'bold';
+  itemName.style.textShadow = '0 2px 4px rgba(0, 0, 0, 0.5)';
+
+  const quality = document.createElement('div');
+  quality.textContent = 'Quality: Legendary';
+  quality.style.marginTop = '6px';
+  quality.style.color = '#daa520';
+  quality.style.fontWeight = 'bold';
+  quality.style.textShadow = '0 1px 2px rgba(0, 0, 0, 0.7)';
+
+  const cost = document.createElement('div');
+  cost.textContent = 'Cost: 3 kills';
+  cost.style.marginTop = '6px';
+  cost.style.fontSize = '16px';
+
+  const perks = document.createElement('div');
+  perks.textContent = 'Perks: ×2 speed, +5 damage';
+  perks.style.marginTop = '6px';
+  perks.style.fontSize = '16px';
+  perks.style.color = '#87ceeb'; // Sky blue for perks
+
+  const status = document.createElement('div');
+  status.textContent = '';
+  status.style.marginTop = '10px';
+  status.style.minHeight = '18px';
+  status.style.color = '#f4e4c1';
+  status.style.fontWeight = 'bold';
+
+  const buyButton = document.createElement('button');
+  buyButton.className = 'shop-buy-button';
+  buyButton.textContent = 'BUY';
+  buyButton.style.marginTop = '10px';
+  buyButton.style.padding = '12px 20px';
+  buyButton.style.borderRadius = '10px';
+  buyButton.style.color = '#f4e4c1';
+  buyButton.style.cursor = 'pointer';
+  buyButton.style.fontSize = '16px';
+  buyButton.style.fontWeight = 'bold';
+  buyButton.style.textShadow = '0 2px 4px rgba(0, 0, 0, 0.5)';
+
+  header.appendChild(title);
+  header.appendChild(close);
+
+  card.appendChild(imageContainer);
+  card.appendChild(itemName);
+  card.appendChild(quality);
+  card.appendChild(cost);
+  card.appendChild(perks);
+  card.appendChild(status);
+  card.appendChild(buyButton);
+
+  panel.appendChild(header);
+  panel.appendChild(card);
+  overlay.appendChild(panel);
+  container.appendChild(button);
+
+  document.body.appendChild(container);
+  document.body.appendChild(overlay);
+
+  function setOpen(nextOpen) {
+    shopUI.isOpen = nextOpen;
+    overlay.style.display = nextOpen ? 'flex' : 'none';
+    if (shopUI.status) shopUI.status.textContent = '';
+    updateShopUI();
+  }
+
+  button.addEventListener('click', () => setOpen(true));
+  close.addEventListener('click', () => setOpen(false));
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay) setOpen(false);
+  });
+
+  buyButton.addEventListener('click', () => {
+    if (!socket || !myId) return;
+    if (shopUI.status) shopUI.status.textContent = '';
+    socket.emit('buyItem', { itemId: 'santa_hat' });
+  });
+
+  shopUI.container = container;
+  shopUI.button = button;
+  shopUI.overlay = overlay;
+  shopUI.card = card;
+  shopUI.status = status;
+  shopUI.buyButton = buyButton;
+
+  updateShopUI();
+}
+
+function updateShopUI() {
+  if (!shopUI.buyButton || !players[myId]) return;
+  const me = players[myId];
+  const owned = !!me.ownedItems?.santa_hat;
+  const kills = me.kills || 0;
+  const canBuy = !owned && kills >= 3;
+
+  if (owned) {
+    shopUI.buyButton.textContent = 'OWNED';
+    shopUI.buyButton.disabled = true;
+    shopUI.buyButton.style.opacity = '0.6';
+    shopUI.buyButton.style.cursor = 'default';
+  } else {
+    shopUI.buyButton.textContent = canBuy ? 'BUY' : `NEED ${Math.max(0, 3 - kills)} KILLS`;
+    shopUI.buyButton.disabled = !canBuy;
+    shopUI.buyButton.style.opacity = canBuy ? '1' : '0.6';
+    shopUI.buyButton.style.cursor = canBuy ? 'pointer' : 'default';
+  }
 }
 
 resizeCanvas();
@@ -58,6 +495,9 @@ let flashEffect = { alpha: 0 };
 // Jump trails for motion blur (double jump effect)
 let motionTrails = [];
 
+// Santa Hat red movement trails
+let santaMotionTrails = [];
+
 // Atmospheric dust particles for immersion
 let dustParticles = [];
 function initDustParticles() {
@@ -76,9 +516,42 @@ function initDustParticles() {
   }
 }
 
+// HEAVY SNOW particle system - so much snow!!!
+let snowParticles = [];
+function initSnowParticles() {
+  snowParticles = [];
+  // Create INSANE AMOUNT of snow particles for blizzard effect
+  for (let i = 0; i < 1500; i++) { // 1500 SNOWFLAKES!!! SO MUCH SNOW!!!
+    snowParticles.push({
+      x: Math.random() * GAME_WIDTH,
+      y: Math.random() * GAME_HEIGHT - GAME_HEIGHT, // Start above screen
+      vx: (Math.random() - 0.5) * 40, // Even more horizontal drift
+      vy: Math.random() * 250 + 150, // INSANE falling speed
+      size: Math.random() * 8 + 3, // MUCH bigger snowflakes
+      opacity: Math.random() * 0.9 + 0.3, // Higher visibility
+      life: Math.random(),
+      wobble: Math.random() * Math.PI * 2, // For swaying motion
+      wobbleSpeed: Math.random() * 4 + 3 // Even faster wobble
+    });
+  }
+}
+
 // Emoji system
 let emojiImages = { knight: {}, spartan: {}, warrior: {} };
 let activeEmojis = [];
+
+// Tree system for parallax background
+let treeImages = [];
+let trees = [];
+let treeVerticalOffset = 110; // Permanent tree vertical offset
+
+// Snow hills system for background
+let snowHills = [];
+const TREE_LAYERS = {
+  background: { parallax: 0.05, scale: 1.5, y_offset: 0 },   // Far trees - now LARGE
+  midground: { parallax: 0.15, scale: 1.0, y_offset: -20 },  // Mid trees - same
+  foreground: { parallax: 0.25, scale: 0.6, y_offset: -40 }  // Near trees - now SMALL
+};
 
 // Sound system
 const sounds = {
@@ -718,7 +1191,7 @@ async function startGame() {
     socket.emit('joinGame', { name: myName, character: myCharacter });
   });
   
-  socket.on('welcome', (data) => {
+  socket.on('welcome', async (data) => {
     myId = data.id;
     data.players.forEach(p => {
       players[p.id] = p;
@@ -730,6 +1203,15 @@ async function startGame() {
     
     // Initialize atmospheric effects
     initDustParticles();
+    initSnowParticles();
+    
+    // Load tree assets and initialize trees
+    await loadTreeImages();
+    initTrees();
+    initSnowHills();
+
+    initShopUI();
+    loadShopAssets();
     
     requestAnimationFrame(gameLoop);
   });
@@ -859,6 +1341,8 @@ async function startGame() {
     }
     
     playerCountEl.textContent = `Players: ${Object.keys(players).length}`;
+
+    updateShopUI();
   });
   
   // Listen for hit events to create effects
@@ -917,6 +1401,55 @@ async function startGame() {
       
       console.log(`🛡️ SHIELD BLOCK! ${defender.name} blocked an attack!`);
     }
+  });
+
+  socket.on('shieldRecoil', (data) => {
+    const attacker = players[data.attackerId];
+    if (attacker) {
+      createShieldBlockParticles(attacker.x, attacker.y - 20, 12);
+    }
+
+    if (data.attackerId === myId) {
+      screenShake.intensity = 12;
+      flashEffect.alpha = 0.2;
+    }
+  });
+
+  socket.on('fallDamage', (data) => {
+    const p = players[data.id];
+    if (p) {
+      createImpactParticles(data.x, data.y - 20, 18);
+      playRandomSound('hit', 0.25, 0.8, 1.1, data.x, data.y);
+    }
+
+    if (data.id === myId) {
+      screenShake.intensity = 14;
+      flashEffect.alpha = 0.35;
+    }
+  });
+
+  socket.on('shopUpdate', (data) => {
+    const p = players[data.id];
+    if (p) {
+      if (data.ownedItems) p.ownedItems = data.ownedItems;
+      if (typeof data.kills === 'number') p.kills = data.kills;
+      if (typeof data.speedMultiplier === 'number') p.speedMultiplier = data.speedMultiplier;
+      if (typeof data.damageBonus === 'number') p.damageBonus = data.damageBonus;
+    }
+    updateShopUI();
+  });
+
+  socket.on('purchaseResult', (data) => {
+    if (!data || !shopUI.status) return;
+    if (data.ok) {
+      shopUI.status.textContent = 'Purchased!';
+    } else {
+      const reason = data.reason || 'failed';
+      if (reason === 'not_enough_kills') shopUI.status.textContent = 'Not enough kills.';
+      else if (reason === 'already_owned') shopUI.status.textContent = 'Already owned.';
+      else shopUI.status.textContent = 'Purchase failed.';
+    }
+    updateShopUI();
   });
   
   // Listen for corpse hit events to create blood
@@ -1330,6 +1863,15 @@ function updateParticles(dt) {
       motionTrails.splice(i, 1);
     }
   }
+
+  // Update Santa Hat movement trails
+  for (let i = santaMotionTrails.length - 1; i >= 0; i--) {
+    const trail = santaMotionTrails[i];
+    trail.life -= dt;
+    if (trail.life <= 0) {
+      santaMotionTrails.splice(i, 1);
+    }
+  }
   
   // Update atmospheric dust particles
   for (let i = 0; i < dustParticles.length; i++) {
@@ -1349,6 +1891,34 @@ function updateParticles(dt) {
     // Intense pulsing opacity for shimmer effect
     dust.opacity = 0.3 + Math.sin(dust.life * 3) * 0.2;
   }
+
+  // Update HEAVY SNOW particles - so much snow!!!
+  for (let i = 0; i < snowParticles.length; i++) {
+    const snow = snowParticles[i];
+    
+    // Update wobble for natural swaying motion
+    snow.wobble += snow.wobbleSpeed * dt;
+    const wobbleX = Math.sin(snow.wobble) * 35; // EXTREME swaying
+    
+    // Update position with wobble effect
+    snow.x += (snow.vx + wobbleX) * dt;
+    snow.y += snow.vy * dt;
+    snow.life += dt * 0.5;
+    
+    // Wrap around horizontally and respawn at top when falling off screen
+    if (snow.x < 0) snow.x = GAME_WIDTH;
+    if (snow.x > GAME_WIDTH) snow.x = 0;
+    if (snow.y > GAME_HEIGHT) {
+      // Respawn at random position above screen
+      snow.y = -100;
+      snow.x = Math.random() * GAME_WIDTH;
+      snow.vx = (Math.random() - 0.5) * 40;
+      snow.vy = Math.random() * 250 + 150;
+    }
+    
+    // Faster twinkling effect
+    snow.opacity = 0.7 + Math.sin(snow.life * 8) * 0.3;
+  }
 }
 
 
@@ -1365,9 +1935,185 @@ function drawParticles() {
   ctx.globalAlpha = 1;
 }
 
+// Draw HEAVY SNOW on top of everything - so much snow!!!
+function drawSnow() {
+  ctx.save();
+  
+  // Don't apply pixelation to snow for smoother, more realistic snowflakes
+  ctx.imageSmoothingEnabled = true;
+  
+  // Apply parallax effect - snow moves slower than camera for depth (like background)
+  const parallaxX = camera.x * 0.15; // Slightly less parallax than background
+  const parallaxY = camera.y * 0.1;  // Slightly less parallax than background
+  
+  snowParticles.forEach(snow => {
+    ctx.globalAlpha = snow.opacity;
+    
+    // Draw snowflake as a small white circle with subtle glow
+    const x = (snow.x - parallaxX) / PIXEL_SCALE;
+    const y = (snow.y - parallaxY) / PIXEL_SCALE;
+    const size = snow.size / PIXEL_SCALE;
+    
+    // Add subtle glow effect for larger snowflakes
+    if (size > 2) {
+      const glowGradient = ctx.createRadialGradient(x, y, 0, x, y, size * 2.5);
+      glowGradient.addColorStop(0, 'rgba(255, 255, 255, 0.9)');
+      glowGradient.addColorStop(0.5, 'rgba(240, 248, 255, 0.5)');
+      glowGradient.addColorStop(1, 'rgba(220, 240, 255, 0)');
+      ctx.fillStyle = glowGradient;
+      ctx.beginPath();
+      ctx.arc(x, y, size * 2.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    
+    // Main snowflake
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.arc(x, y, size, 0, Math.PI * 2);
+    ctx.fill();
+  });
+  
+  ctx.restore();
+}
+
 // =============================================================================
 // EMOJI SYSTEM
 // =============================================================================
+
+// Load tree images
+async function loadTreeImages() {
+  const treeImage = new Image();
+  treeImage.src = '/assets/trees/tree.png';
+  
+  return new Promise((resolve) => {
+    treeImage.onload = () => {
+      treeImages.push(treeImage);
+      console.log('Tree asset loaded successfully - dimensions:', treeImage.width, 'x', treeImage.height);
+      resolve();
+    };
+    treeImage.onerror = () => {
+      console.log('Failed to load tree asset - check path: /assets/trees/tree.png');
+      resolve();
+    };
+  });
+}
+
+// Initialize snow hills
+function initSnowHills() {
+  snowHills = [];
+  
+  // Create snow hills all over the level with varied sizes
+  const totalHills = 25;
+  for (let i = 0; i < totalHills; i++) {
+    // Random position across the map width
+    const x = Math.random() * GAME_WIDTH * 1.5 - GAME_WIDTH * 0.25;
+    
+    // Random size - some small, some big
+    const sizeVariation = Math.random();
+    let width, height;
+    
+    if (sizeVariation < 0.4) {
+      // Small hills
+      width = 100 + Math.random() * 150;
+      height = 40 + Math.random() * 60;
+    } else if (sizeVariation < 0.8) {
+      // Medium hills
+      width = 200 + Math.random() * 200;
+      height = 80 + Math.random() * 80;
+    } else {
+      // Big hills
+      width = 300 + Math.random() * 300;
+      height = 120 + Math.random() * 120;
+    }
+    
+    // Position hills to touch ground line exactly
+    const y = GROUND_Y - height; // Hills touch ground line
+    
+    // Random parallax for depth
+    const parallax = 0.01 + Math.random() * 0.03; // Very slow parallax for background
+    
+    snowHills.push({
+      x: x,
+      y: y,
+      width: width,
+      height: height,
+      parallax: parallax,
+      opacity: 0.6 + Math.random() * 0.3 // 0.6 to 0.9 opacity
+    });
+  }
+}
+
+// Initialize parallax trees
+function initTrees() {
+  trees = [];
+  
+  // Create trees all on collision line (red line) with varied sizes
+  const totalTrees = 40; // Increased from 20 to 40
+  for (let i = 0; i < totalTrees; i++) {
+    let x;
+    
+    // Bundle more trees around center while keeping some scattered
+    if (i < totalTrees * 0.6) {
+      // 60% of trees bundled around center
+      x = GAME_WIDTH/2 + (Math.random() - 0.5) * GAME_WIDTH * 0.8;
+    } else {
+      // 40% scattered across entire map
+      x = Math.random() * GAME_WIDTH;
+    }
+    
+    // Random size - some small, some HUGE
+    const sizeVariation = Math.random();
+    let width, height;
+    
+    if (sizeVariation < 0.3) {
+      // Small trees
+      width = 60 + Math.random() * 40;
+      height = 80 + Math.random() * 60;
+    } else if (sizeVariation < 0.7) {
+      // Medium trees
+      width = 120 + Math.random() * 80;
+      height = 160 + Math.random() * 120;
+    } else {
+      // HUGE trees
+      width = 200 + Math.random() * 150;
+      height = 300 + Math.random() * 200;
+    }
+    
+    // Position tree so bottom edge touches ground line exactly
+    const y = GROUND_Y - height;
+    
+    // Random depth - ensure more trees in front layer
+    let layer, parallax, opacity;
+    const depthRandom = Math.random();
+    
+    if (depthRandom < 0.3) {
+      // Behind character
+      layer = 'background';
+      parallax = 0.02; // Much slower
+      opacity = 0.7;
+    } else if (depthRandom < 0.5) {
+      // Mid depth
+      layer = 'midground';
+      parallax = 0.05; // Much slower
+      opacity = 0.85;
+    } else {
+      // In front of character - 50% of trees now in front!
+      layer = 'foreground';
+      parallax = 0.08; // Much slower
+      opacity = 1.0;
+    }
+    
+    trees.push({
+      x: x,
+      y: y,
+      layer: layer,
+      width: width,
+      height: height,
+      parallax: parallax,
+      opacity: opacity
+    });
+  }
+}
 
 // Load emoji images
 async function loadEmojiImages() {
@@ -1411,25 +2157,123 @@ function updateEmojis(dt) {
   }
 }
 
-// Draw emojis - SCALED for pixelation
-function drawEmojis() {
-  for (const emoji of activeEmojis) {
-    const player = players[emoji.playerId];
-    if (!player) continue; // Player disconnected
+// Draw snow hills
+function drawSnowHills() {
+  ctx.save();
+  
+  // Apply parallax effect for snow hills
+  snowHills.forEach(hill => {
+    const parallaxX = camera.x * hill.parallax;
+    const parallaxY = 0; // No vertical parallax for hills
     
-    // Fade out in last 0.5 seconds
-    const alpha = Math.min(1, emoji.life / 0.5);
+    // Calculate screen position
+    const screenX = (hill.x - parallaxX) / PIXEL_SCALE;
+    const screenY = hill.y / PIXEL_SCALE;
+    const scaledWidth = hill.width / PIXEL_SCALE;
+    const scaledHeight = hill.height / PIXEL_SCALE;
+    
+    // Draw snow hill as white/gray curved shape
+    ctx.globalAlpha = hill.opacity;
+    
+    // Create gradient for snow hill
+    const hillGradient = ctx.createLinearGradient(screenX, screenY, screenX, screenY + scaledHeight);
+    hillGradient.addColorStop(0, '#ffffff'); // White at top
+    hillGradient.addColorStop(0.7, '#e8f4f8'); // Light blue
+    hillGradient.addColorStop(1, '#d0e8f0'); // Slightly darker blue
+    
+    ctx.fillStyle = hillGradient;
+    
+    // Draw hill as rounded rectangle (hill shape)
+    ctx.beginPath();
+    ctx.moveTo(screenX, screenY + scaledHeight);
+    ctx.quadraticCurveTo(screenX + scaledWidth * 0.25, screenY + scaledHeight * 0.3, screenX + scaledWidth * 0.5, screenY);
+    ctx.quadraticCurveTo(screenX + scaledWidth * 0.75, screenY + scaledHeight * 0.3, screenX + scaledWidth, screenY + scaledHeight);
+    ctx.closePath();
+    ctx.fill();
+  });
+  
+  ctx.restore();
+}
+
+// Draw parallax trees
+function drawTrees() {
+  if (treeImages.length === 0) return;
+  
+  const treeImage = treeImages[0];
+  
+  // Sort trees by layer (background to foreground)
+  const sortedTrees = [...trees].sort((a, b) => {
+    const layerOrder = { background: 0, midground: 1, foreground: 2 };
+    return layerOrder[a.layer] - layerOrder[b.layer];
+  });
+  
+  sortedTrees.forEach(tree => {
     ctx.save();
-    ctx.globalAlpha = alpha;
     
-    // Medium size - scaled for pixelation
-    const size = 50 / PIXEL_SCALE;
-    const x = player.x / PIXEL_SCALE;
-    const y = player.y / PIXEL_SCALE - 70 / PIXEL_SCALE; // Above player's head
-    ctx.drawImage(emoji.img, x - size / 2, y - size / 2, size, size);
+    // Apply parallax effect for trees - only horizontal, no vertical parallax
+    const parallaxX = camera.x * tree.parallax;
+    const parallaxY = 0; // NO vertical parallax so trees stay on ground
+    
+    // Calculate screen position with parallax
+    const screenX = (tree.x - parallaxX) / PIXEL_SCALE;
+    const screenY = tree.y / PIXEL_SCALE; // No vertical parallax
+    const scaledWidth = tree.width / PIXEL_SCALE;
+    const scaledHeight = tree.height / PIXEL_SCALE;
+    
+    // Apply individual tree opacity
+    ctx.globalAlpha = tree.opacity;
+    
+    // Draw tree OR fallback rectangle
+    if (treeImage && treeImage.complete && treeImage.naturalWidth > 0) {
+      ctx.drawImage(treeImage, screenX, screenY, scaledWidth, scaledHeight);
+    } else {
+      // Fallback: draw colored rectangle to show tree position
+      const colors = {
+        background: 'rgba(100, 100, 200, 0.5)',
+        midground: 'rgba(100, 200, 100, 0.5)',
+        foreground: 'rgba(200, 100, 100, 0.5)'
+      };
+      ctx.fillStyle = colors[tree.layer] || 'rgba(150, 150, 150, 0.5)';
+      ctx.fillRect(screenX, screenY, scaledWidth, scaledHeight);
+      
+      // Draw border to make it more visible
+      ctx.strokeStyle = 'white';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(screenX, screenY, scaledWidth, scaledHeight);
+    }
     
     ctx.restore();
-  }
+  });
+}
+
+// Draw emojis
+function drawEmojis() {
+  activeEmojis.forEach(emoji => {
+    if (emojiImages[emoji.player] && emojiImages[emoji.player][emoji.number]) {
+      const img = emojiImages[emoji.player][emoji.number];
+      if (img.complete && img.naturalWidth > 0) {
+        ctx.save();
+        
+        // Apply screen shake
+        const shakeX = Math.sin(Date.now() * 50) * shakeIntensity;
+        const shakeY = Math.cos(Date.now() * 70) * shakeIntensity;
+        
+        // Center on player position with parallax
+        const centerX = RENDER_WIDTH / 2 + (emoji.x - camera.x) / PIXEL_SCALE + shakeX;
+        const centerY = RENDER_HEIGHT / 2 + (emoji.y - camera.y - 80) / PIXEL_SCALE + shakeY;
+        
+        // Floating animation
+        const floatY = Math.sin(Date.now() * 0.003 + emoji.startTime) * 5;
+        
+        ctx.translate(centerX, centerY + floatY);
+        ctx.scale(emoji.scale / PIXEL_SCALE, emoji.scale / PIXEL_SCALE);
+        
+        // Draw emoji
+        ctx.drawImage(img, -img.width / 2, -img.height / 2);
+        ctx.restore();
+      }
+    }
+  });
 }
 
 // Sprite name patterns
@@ -1818,6 +2662,27 @@ function gameLoop(timestamp) {
     // This enables true all-directional scrolling platformer camera
   }
   
+  // Create Santa Hat red trail when moving
+  const me = players[myId];
+  if (me && me.ownedItems?.santa_hat && (currentInput.left || currentInput.right) && !me.isDying && me.hp > 0) {
+    // Only create trail if actually moving (not just holding direction while stopped)
+    if (Math.abs(me.vx) > 50) {
+      // Create red trail occasionally
+      if (Math.random() < 0.3) { // 30% chance per frame
+        santaMotionTrails.push({
+          x: me.x,
+          y: me.y,
+          character: me.character,
+          state: me.state,
+          animationFrame: me.animationFrame,
+          facingRight: me.facingRight,
+          life: 0.2,
+          maxLife: 0.2
+        });
+      }
+    }
+  }
+
   // Send input
   if (socket && socket.connected) {
     inputSeq++;
@@ -1860,6 +2725,15 @@ function render() {
   // Draw background FIRST (before camera transform) - BACK LAYER
   // Use destination-over to ensure it stays BEHIND everything
   ctx.save();
+  
+  // Draw nice blue gradient background
+  const skyGradient = ctx.createLinearGradient(0, 0, 0, RENDER_HEIGHT);
+  skyGradient.addColorStop(0, '#87CEEB'); // Sky blue at top
+  skyGradient.addColorStop(0.5, '#98D8E8'); // Lighter blue
+  skyGradient.addColorStop(1, '#B0E0E6'); // Powder blue at bottom
+  ctx.fillStyle = skyGradient;
+  ctx.fillRect(0, 0, RENDER_WIDTH, RENDER_HEIGHT);
+  
   if (backgroundLoaded && backgroundImage) {
     // Fake parallax: Background moves slower than camera for depth
     const parallaxX = camera.x * 0.2;
@@ -1960,6 +2834,9 @@ function render() {
   ctx.lineTo(RENDER_WIDTH, groundY);
   ctx.stroke();
   
+  // Draw snow hills in background
+  drawSnowHills();
+  
   // Draw world bounds - SCALED
   ctx.strokeStyle = '#8b4513';
   ctx.lineWidth = 4 / PIXEL_SCALE;
@@ -2000,6 +2877,47 @@ function render() {
     ctx.restore();
   });
   
+  // Draw Santa Hat red trails (tinted red)
+  santaMotionTrails.forEach(trail => {
+    const alpha = (trail.life / trail.maxLife) * 0.6; // Slightly more visible
+    
+    // Get sprite frame
+    const frames = spriteSheets[trail.character]?.[trail.state];
+    if (!frames || frames.length === 0) return;
+    
+    const frameIndex = trail.animationFrame % frames.length;
+    const frame = frames[frameIndex];
+    if (!frame || !frame.complete) return;
+    
+    // Scale for pixelation
+    const x = trail.x / PIXEL_SCALE;
+    const y = trail.y / PIXEL_SCALE;
+    const gameScale = (hitboxData[trail.character]?.gameScale || 1.0) / PIXEL_SCALE;
+    const width = frame.width * gameScale;
+    const height = frame.height * gameScale;
+    
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.translate(x, y);
+    
+    // Apply red tint
+    ctx.globalCompositeOperation = 'multiply';
+    ctx.fillStyle = 'rgba(255, 50, 50, 1)';
+    ctx.fillRect(-width / 2, -height / 2, width, height);
+    ctx.globalCompositeOperation = 'source-over';
+    
+    // Flip sprite if needed
+    const charData = hitboxData[trail.character];
+    const spriteFacesLeft = charData?.facing === 'left';
+    const shouldFlip = (spriteFacesLeft && trail.facingRight) || (!spriteFacesLeft && !trail.facingRight);
+    if (shouldFlip) {
+      ctx.scale(-1, 1);
+    }
+    
+    ctx.drawImage(frame, -width / 2, -height / 2, width, height);
+    ctx.restore();
+  });
+  
   // Draw players
   for (const id in players) {
     const p = players[id];
@@ -2007,6 +2925,9 @@ function render() {
     if ((p.hp <= 0 || p.alive === false) && !p.isDying) continue;
     drawPlayer(p, id === myId);
   }
+  
+  // Draw parallax trees (after players so front trees appear in front)
+  drawTrees();
   
   // Draw particles
   drawParticles();
@@ -2021,6 +2942,9 @@ function render() {
     ctx.fillStyle = `rgba(220, 20, 60, ${flashEffect.alpha})`;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
   }
+
+  // Draw HEAVY SNOW on top of everything - so much snow!!!
+  drawSnow();
 }
 
 // Draw just the sprite (for trails)
@@ -2165,6 +3089,18 @@ function drawPlayer(player, isMe) {
   ctx.strokeText(player.name, x, nameY);
   ctx.fillText(player.name, x, nameY);
   ctx.imageSmoothingEnabled = false;
+
+  // Draw Santa hat under the name (on the head)
+  let hatHeight = 0;
+  if (player.ownedItems?.santa_hat && santaHatImage && santaHatImage.complete && santaHatImage.naturalWidth > 0) {
+    ctx.imageSmoothingEnabled = true;
+    const hatWidth = Math.max(10, width * 0.28);
+    hatHeight = hatWidth * (santaHatImage.naturalHeight / santaHatImage.naturalWidth);
+    const hatX = x - hatWidth / 2;
+    const hatY = nameY + 4;
+    ctx.drawImage(santaHatImage, hatX, hatY, hatWidth, hatHeight);
+    ctx.imageSmoothingEnabled = false;
+  }
   
   // Draw HP bar with smooth animation - smaller and under name (only if alive)
   if (!player.isDying && !player.isCorpse && player.hp > 0) {
@@ -2182,8 +3118,8 @@ function drawPlayer(player, isMe) {
     }
     const displayPercent = player.displayHp / player.maxHp;
     
-    // Position HP bar UNDER name (2 pixels below)
-    const hpBarY = nameY + 2;
+    // Position HP bar UNDER name (+ hat if present)
+    const hpBarY = nameY + 2 + (hatHeight > 0 ? (hatHeight + 2) : 0);
     
     // Background (black) - use screen coordinates
     ctx.fillStyle = 'rgba(0,0,0,0.7)';
