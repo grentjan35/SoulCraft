@@ -1461,6 +1461,13 @@ async function startGame() {
     gameContainer.style.display = 'block';
     playerNameEl.textContent = myName;
     
+    // Add default instructions to chat
+    addSystemMessage('Press the mute icon to mute sounds or music in the bottom right');
+    addSystemMessage('Press 1 through 8 on the keyboard for emojis');
+    addSystemMessage('Use S to shield');
+    addSystemMessage('Use space to attack');
+    addSystemMessage('Use arrow keys or WASD to move');
+    
     // Initialize atmospheric effects
     initDustParticles();
     initSnowParticles();
@@ -1863,6 +1870,20 @@ function addChatMessage(name, message, isMe) {
   
   messageDiv.appendChild(nameSpan);
   messageDiv.appendChild(textSpan);
+  
+  chatMessages.appendChild(messageDiv);
+  chatMessages.scrollTop = chatMessages.scrollHeight;
+  
+  // Keep only last 50 messages
+  while (chatMessages.children.length > 50) {
+    chatMessages.removeChild(chatMessages.firstChild);
+  }
+}
+
+function addSystemMessage(message) {
+  const messageDiv = document.createElement('div');
+  messageDiv.className = 'chat-system';
+  messageDiv.textContent = message;
   
   chatMessages.appendChild(messageDiv);
   chatMessages.scrollTop = chatMessages.scrollHeight;
