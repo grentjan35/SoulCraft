@@ -413,6 +413,182 @@ function initShopUI() {
   document.body.appendChild(container);
   document.body.appendChild(overlay);
 
+  // Create mute button container
+  const muteContainer = document.createElement('div');
+  muteContainer.id = 'mute-container';
+  muteContainer.style.position = 'fixed';
+  muteContainer.style.bottom = '10px';
+  muteContainer.style.right = '10px';
+  muteContainer.style.zIndex = '10000';
+  muteContainer.style.display = 'flex';
+  muteContainer.style.flexDirection = 'column';
+  muteContainer.style.alignItems = 'flex-end';
+  muteContainer.style.gap = '5px';
+
+  // Create main mute button
+  const mainMuteButton = document.createElement('button');
+  mainMuteButton.id = 'main-mute-button';
+  mainMuteButton.textContent = '🔊';
+  mainMuteButton.title = 'Sound Options';
+  mainMuteButton.style.width = '40px';
+  mainMuteButton.style.height = '40px';
+  mainMuteButton.style.borderRadius = '50%';
+  mainMuteButton.style.border = '2px solid #8b4513';
+  mainMuteButton.style.backgroundColor = 'rgba(20, 12, 8, 0.9)';
+  mainMuteButton.style.color = '#f4e4c1';
+  mainMuteButton.style.fontSize = '20px';
+  mainMuteButton.style.cursor = 'pointer';
+  mainMuteButton.style.display = 'flex';
+  mainMuteButton.style.alignItems = 'center';
+  mainMuteButton.style.justifyContent = 'center';
+  mainMuteButton.style.transition = 'all 0.3s ease';
+  mainMuteButton.style.order = '2'; // Keep at bottom
+
+  // Create individual mute buttons (hidden by default)
+  const muteMusicButton = document.createElement('button');
+  muteMusicButton.textContent = '🎵';
+  muteMusicButton.title = 'Toggle Music';
+  muteMusicButton.style.width = '35px';
+  muteMusicButton.style.height = '35px';
+  muteMusicButton.style.borderRadius = '50%';
+  muteMusicButton.style.border = '2px solid #8b4513';
+  muteMusicButton.style.backgroundColor = 'rgba(20, 12, 8, 0.9)';
+  muteMusicButton.style.color = '#f4e4c1';
+  muteMusicButton.style.fontSize = '16px';
+  muteMusicButton.style.cursor = 'pointer';
+  muteMusicButton.style.display = 'none';
+  muteMusicButton.style.alignItems = 'center';
+  muteMusicButton.style.justifyContent = 'center';
+  muteMusicButton.style.transition = 'all 0.3s ease';
+  muteMusicButton.style.order = '1'; // Above main button
+
+  const muteSoundsButton = document.createElement('button');
+  muteSoundsButton.textContent = '⚔️';
+  muteSoundsButton.title = 'Toggle Game Sounds';
+  muteSoundsButton.style.width = '35px';
+  muteSoundsButton.style.height = '35px';
+  muteSoundsButton.style.borderRadius = '50%';
+  muteSoundsButton.style.border = '2px solid #8b4513';
+  muteSoundsButton.style.backgroundColor = 'rgba(20, 12, 8, 0.9)';
+  muteSoundsButton.style.color = '#f4e4c1';
+  muteSoundsButton.style.fontSize = '16px';
+  muteSoundsButton.style.cursor = 'pointer';
+  muteSoundsButton.style.display = 'none';
+  muteSoundsButton.style.alignItems = 'center';
+  muteSoundsButton.style.justifyContent = 'center';
+  muteSoundsButton.style.transition = 'all 0.3s ease';
+  muteSoundsButton.style.order = '0'; // Topmost
+
+  // Add hover effects
+  const addHoverEffect = (button) => {
+    button.addEventListener('mouseenter', () => {
+      button.style.transform = 'scale(1.1)';
+      button.style.backgroundColor = 'rgba(40, 24, 16, 0.95)';
+    });
+    button.addEventListener('mouseleave', () => {
+      button.style.transform = 'scale(1)';
+      button.style.backgroundColor = 'rgba(20, 12, 8, 0.9)';
+    });
+  };
+
+  addHoverEffect(mainMuteButton);
+  addHoverEffect(muteMusicButton);
+  addHoverEffect(muteSoundsButton);
+
+  // Toggle menu visibility
+  let menuOpen = false;
+  mainMuteButton.addEventListener('click', () => {
+    menuOpen = !menuOpen;
+    muteMusicButton.style.display = menuOpen ? 'flex' : 'none';
+    muteSoundsButton.style.display = menuOpen ? 'flex' : 'none';
+  });
+
+  // Individual mute functions
+  muteMusicButton.addEventListener('click', () => {
+    if (sounds.backgroundMusic) {
+      if (sounds.backgroundMusic.volume === 0) {
+        sounds.backgroundMusic.volume = previousVolumes.backgroundMusic || 0.3;
+        muteMusicButton.style.opacity = '1';
+      } else {
+        previousVolumes.backgroundMusic = sounds.backgroundMusic.volume;
+        sounds.backgroundMusic.volume = 0;
+        muteMusicButton.style.opacity = '0.5';
+      }
+    }
+  });
+
+  muteSoundsButton.addEventListener('click', () => {
+    const isSoundsMuted = currentMuteState === MUTE_STATES.ALL_MUTED;
+    if (isSoundsMuted) {
+      unmuteAllSounds();
+      muteSoundsButton.style.opacity = '1';
+      currentMuteState = MUTE_STATES.UNMUTED;
+    } else {
+      muteAllSounds();
+      muteSoundsButton.style.opacity = '0.5';
+      currentMuteState = MUTE_STATES.ALL_MUTED;
+    }
+  });
+
+  // Close menu when clicking outside
+  document.addEventListener('click', (e) => {
+    if (!muteContainer.contains(e.target) && menuOpen) {
+      menuOpen = false;
+      muteMusicButton.style.display = 'none';
+      muteSoundsButton.style.display = 'none';
+    }
+  });
+
+  muteContainer.appendChild(muteSoundsButton);
+  muteContainer.appendChild(muteMusicButton);
+  muteContainer.appendChild(mainMuteButton);
+  document.body.appendChild(muteContainer);
+
+  window.muteButton = mainMuteButton;
+  window.muteContainer = muteContainer;
+
+  // Create mute button popup message
+  function showMuteButtonPopup() {
+    const popup = document.createElement('div');
+    popup.id = 'mute-button-popup';
+    popup.textContent = 'New mute button!';
+    popup.style.position = 'fixed';
+    popup.style.bottom = '60px';
+    popup.style.right = '10px';
+    popup.style.padding = '8px 12px';
+    popup.style.backgroundColor = 'rgba(218, 165, 32, 0.9)';
+    popup.style.color = '#000';
+    popup.style.borderRadius = '8px';
+    popup.style.fontSize = '14px';
+    popup.style.fontWeight = 'bold';
+    popup.style.zIndex = '10001';
+    popup.style.pointerEvents = 'none';
+    popup.style.transition = 'opacity 0.3s ease';
+    popup.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.3)';
+    
+    document.body.appendChild(popup);
+    
+    // Remove popup after 1 second
+    setTimeout(() => {
+      popup.style.opacity = '0';
+      setTimeout(() => {
+        if (popup.parentNode) {
+          popup.parentNode.removeChild(popup);
+        }
+      }, 300);
+    }, 1000);
+  }
+
+  // Show popup on first game start
+  let hasShownPopup = localStorage.getItem('muteButtonPopupShown');
+  if (!hasShownPopup) {
+    // Delay popup to show after game loads
+    setTimeout(() => {
+      showMuteButtonPopup();
+      localStorage.setItem('muteButtonPopupShown', 'true');
+    }, 2000);
+  }
+
   function setOpen(nextOpen) {
     shopUI.isOpen = nextOpen;
     overlay.style.display = nextOpen ? 'flex' : 'none';
@@ -539,6 +715,8 @@ function initSnowParticles() {
 // Emoji system
 let emojiImages = { knight: {}, spartan: {}, warrior: {} };
 let activeEmojis = [];
+const EMOJI_COUNT = 8; // Number of emoji images available (1-8)
+const CHAT_BUBBLE_DURATION = 3; // Chat bubbles display for 3 seconds
 
 // Tree system for parallax background
 let treeImages = [];
@@ -559,8 +737,18 @@ const sounds = {
   slash: [],
   hit: [],
   chat: null,
-  custom: {} // Custom sounds loaded from /assets/sounds/
+  custom: {}, // Custom sounds loaded from /assets/sounds/
+  backgroundMusic: null // Background music
 };
+
+// Mute system
+const MUTE_STATES = {
+  UNMUTED: 'unmuted',
+  MUSIC_ONLY: 'music_only',
+  ALL_MUTED: 'all_muted'
+};
+let currentMuteState = MUTE_STATES.UNMUTED;
+let previousVolumes = {}; // Store previous volumes to restore when unmuted
 
 // Track last played frame for each player to avoid replaying sounds
 const lastPlayedFrame = {};
@@ -569,15 +757,15 @@ const highestFrameSeen = {};
 
 // OPTIMIZED Sound Loading - Using New 1.wav, 2.wav, 3.wav... Pattern!
 async function loadSounds() {
-  console.log('🚀 Loading sounds with OPTIMIZED numbered system (1.wav, 2.wav, 3.wav...)');
+  // Sound loading started
   
   // Sound folders with USER'S EXACT specifications! 
   const soundCategories = [
     { folder: 'death', key: 'death', maxFiles: 2, volume: 0.5, extensions: ['wav'] }, // When any player dies ✅
     { folder: 'shield hit', key: 'shield_block', maxFiles: 4, volume: 0.4, extensions: ['wav'] }, // When shielded player gets hit ✅
-    { folder: 'sword slash', key: 'attack_slash', maxFiles: 2, volume: 0.4, extensions: ['wav'] }, // When player attacks (not sword_slash) ✅
+    { folder: 'sword slash', key: 'attack_slash', maxFiles: 2, volume: 0.1, extensions: ['wav'] }, // When player attacks - very quiet
     { folder: 'woosh', key: 'jump', maxFiles: 4, volume: 0.4, extensions: ['wav'] }, // When player jumps/double jumps ✅
-    { folder: 'hit', key: 'hit', maxFiles: 2, volume: 0.6, extensions: ['wav'] }, // Regular hits ✅  
+    { folder: 'hit', key: 'hit', maxFiles: 2, volume: 0.15, extensions: ['wav'] }, // Regular hits - very quiet  
     { folder: 'footsteps', key: 'footsteps', maxFiles: 8, volume: 0.3, extensions: ['wav'] } // Footsteps ✅
   ];
   
@@ -587,7 +775,7 @@ async function loadSounds() {
     const basePath = `/assets/sounds/${category.folder}/`;
     const soundArray = sounds[category.key] || [];
     
-    console.log(`🔊 Loading ${category.folder} sounds...`);
+    // Loading sound files...
     
     // Try to load numbered files with both extensions
     for (let i = 1; i <= category.maxFiles; i++) {
@@ -599,7 +787,7 @@ async function loadSounds() {
           .then(() => {
             audio.volume = category.volume;
             soundArray.push(audio);
-            console.log(`  ✅ Loaded ${category.folder}/${i}.${ext}`);
+            // Sound loaded
             return audio;
           })
           .catch(() => {
@@ -618,14 +806,114 @@ async function loadSounds() {
   // Wait for all sounds to finish loading
   await Promise.all(loadPromises);
   
-  // Summary with USER'S EXACT specifications
-  console.log('🎵 OPTIMIZED Sound Loading Complete!');
-  console.log(`  💀 Death sounds: ${sounds.death?.length || 0} (when any player dies)`);
-  console.log(`  🛡️  Shield block sounds: ${sounds.shield_block?.length || 0} (when shielded player gets hit)`);
-  console.log(`  ⚔️  Attack slash sounds: ${sounds.attack_slash?.length || 0} (when player attacks)`);
-  console.log(`  💨 Jump sounds: ${sounds.jump?.length || 0} (jumps and double jumps)`);
-  console.log(`  💥 Hit sounds: ${sounds.hit?.length || 0} (regular hits)`);
-  console.log(`  👣 Footstep sounds: ${sounds.footsteps?.length || 0} (walking)`);
+  // Sound loading completed
+}
+
+// Load and initialize background music
+async function loadBackgroundMusic() {
+  try {
+    const backgroundMusic = new Audio('/assets/background music.mp3');
+    backgroundMusic.volume = 0.3; // 30% volume - increased from 15% to balance with game sounds
+    backgroundMusic.loop = true; // Loop forever
+    backgroundMusic.preload = 'auto';
+    
+    // Set up event handlers
+    backgroundMusic.addEventListener('canplaythrough', () => {
+      // Start playing background music
+      backgroundMusic.play().catch(e => {
+        console.log('Background music autoplay prevented:', e);
+        // Will start on first user interaction
+      });
+    });
+    
+    backgroundMusic.addEventListener('error', (e) => {
+      console.warn('Background music failed to load:', e);
+    });
+    
+    sounds.backgroundMusic = backgroundMusic;
+    
+  } catch (error) {
+    console.warn('Could not load background music:', error);
+  }
+}
+
+// Start background music on first user interaction (for browser autoplay compliance)
+function startBackgroundMusicOnInteraction() {
+  if (sounds.backgroundMusic && sounds.backgroundMusic.paused) {
+    sounds.backgroundMusic.play().catch(e => {
+      console.log('Background music play failed:', e);
+    });
+  }
+}
+
+// Mute/Unmute sounds with multiple states
+function toggleMute() {
+  // Cycle through states: UNMUTED -> MUSIC_ONLY -> ALL_MUTED -> UNMUTED
+  switch (currentMuteState) {
+    case MUTE_STATES.UNMUTED:
+      currentMuteState = MUTE_STATES.MUSIC_ONLY;
+      muteBackgroundMusicOnly();
+      break;
+    case MUTE_STATES.MUSIC_ONLY:
+      currentMuteState = MUTE_STATES.ALL_MUTED;
+      muteAllSounds();
+      break;
+    case MUTE_STATES.ALL_MUTED:
+      currentMuteState = MUTE_STATES.UNMUTED;
+      unmuteAllSounds();
+      break;
+  }
+  
+  updateMuteButton();
+}
+
+// Mute only background music
+function muteBackgroundMusicOnly() {
+  if (sounds.backgroundMusic) {
+    previousVolumes.backgroundMusic = sounds.backgroundMusic.volume;
+    sounds.backgroundMusic.volume = 0;
+  }
+}
+
+// Mute all sounds
+function muteAllSounds() {
+  // Mute background music
+  if (sounds.backgroundMusic) {
+    previousVolumes.backgroundMusic = sounds.backgroundMusic.volume;
+    sounds.backgroundMusic.volume = 0;
+  }
+  
+  // Mute all sound categories
+  Object.keys(sounds).forEach(key => {
+    if (key !== 'backgroundMusic' && Array.isArray(sounds[key])) {
+      sounds[key].forEach(audio => {
+        if (audio && audio.volume !== undefined) {
+          if (!previousVolumes[key]) previousVolumes[key] = [];
+          previousVolumes[key].push(audio.volume);
+          audio.volume = 0;
+        }
+      });
+    }
+  });
+}
+
+// Unmute all sounds
+function unmuteAllSounds() {
+  // Restore background music volume
+  if (sounds.backgroundMusic && previousVolumes.backgroundMusic !== undefined) {
+    sounds.backgroundMusic.volume = previousVolumes.backgroundMusic;
+  }
+  
+  // Restore all sound category volumes
+  Object.keys(sounds).forEach(key => {
+    if (key !== 'backgroundMusic' && Array.isArray(sounds[key]) && previousVolumes[key]) {
+      sounds[key].forEach((audio, index) => {
+        if (audio && previousVolumes[key][index] !== undefined) {
+          audio.volume = previousVolumes[key][index];
+        }
+      });
+    }
+  });
 }
 
 // RENDER.COM OPTIMIZED - Fast sound loader with aggressive caching
@@ -661,6 +949,9 @@ function loadSingleSound(audio, src) {
 
 // Enhanced 3D positional sound player with distance and stereo panning
 function playSound(soundType, noPitchVariation = false, sourceX = null, sourceY = null) {
+  // Don't play if all sounds are muted
+  if (currentMuteState === MUTE_STATES.ALL_MUTED) return;
+  
   // For chat, skip since we don't have chat sound
   if (soundType === 'chat') {
     return;
@@ -670,7 +961,7 @@ function playSound(soundType, noPitchVariation = false, sourceX = null, sourceY 
   
   // Pick random sound from array
   if (!soundArray || soundArray.length === 0) {
-    console.log(`No sounds available for type: ${soundType}`);
+    // No sounds available
     return;
   }
   
@@ -743,17 +1034,19 @@ async function loadCustomSounds() {
         setTimeout(reject, 500);
       });
       sounds.custom[soundName] = audio;
-      console.log(`✓ Loaded sound: ${soundName}`);
     } catch (e) {
       // Sound doesn't exist, skip it
     }
   }
   
-  console.log(`Loaded ${Object.keys(sounds.custom).length} custom sound groups`);
+  // Custom sounds loaded
 }
 
 // Play random sound with 3D positional audio support
 function playRandomSound(soundName, volume = 0.6, minPitch = 0.9, maxPitch = 1.1, sourceX = null, sourceY = null) {
+  // Don't play if all sounds are muted
+  if (currentMuteState === MUTE_STATES.ALL_MUTED) return;
+  
   // Map sound names to USER'S EXACT specifications
   const soundMapping = {
     'attack': 'attack_slash',     // sword slash folder when attacking
@@ -771,7 +1064,7 @@ function playRandomSound(soundName, volume = 0.6, minPitch = 0.9, maxPitch = 1.1
   const soundArray = sounds[mappedSoundName];
   
   if (!soundArray || soundArray.length === 0) {
-    console.log(`Sound not found: ${soundName} (mapped to ${mappedSoundName})`);
+    // Sound not found
     return;
   }
   
@@ -788,6 +1081,50 @@ function playRandomSound(soundName, volume = 0.6, minPitch = 0.9, maxPitch = 1.1
   }
   
   sound.play().catch(e => console.log('Random sound play failed:', e));
+}
+
+// Play frame-specific sounds for animations
+function playFrameSound(playerId, character, state, animationFrame) {
+  // Only play frame sounds for specific states that need frame-by-frame audio
+  if (state === 'attack') {
+    // Play attack sound on specific frames
+    if (animationFrame === 1) {
+      playRandomSound('attack', 0.1, 0.9, 1.1);
+    }
+  } else if (state === 'hit') {
+    // Play hit sound on first frame
+    if (animationFrame === 0) {
+      playRandomSound('hit', 0.15, 0.9, 1.1);
+    }
+  }
+}
+
+// Play animation-specific sounds
+function playAnimationSound(state, frame, x = null, y = null) {
+  // Map states to appropriate sounds
+  switch (state) {
+    case 'attack':
+      if (frame === 0) {
+        playRandomSound('attack', 0.1, 0.9, 1.1, x, y);
+      }
+      break;
+    case 'hit':
+      if (frame === 0) {
+        playRandomSound('hit', 0.15, 0.9, 1.1, x, y);
+      }
+      break;
+    case 'death':
+      if (frame === 0) {
+        playRandomSound('death', 0.9, 0.8, 1.0, x, y);
+      }
+      break;
+    case 'shield':
+      if (frame === 0) {
+        playRandomSound('shield_hit', 0.8, 0.9, 1.1, x, y);
+      }
+      break;
+    // Other states like 'walk', 'idle', 'air' are handled elsewhere
+  }
 }
 
 // 3D POSITIONAL AUDIO SYSTEM
@@ -849,87 +1186,14 @@ function apply3DAudio(sound, sourceX, sourceY) {
     
   } catch (e) {
     // Fallback if Web Audio API not supported
-    console.log('3D audio not supported, using distance-only volume');
+    // 3D audio not supported
   }
-}
-
-// USER'S EXACT SPECIFICATIONS - Play sounds for specific events with 3D positioning
-function playAnimationSound(state, frame = 0, sourceX = null, sourceY = null) {
-  switch(state) {
-    case 'attack':
-      // SWORD SLASH sounds when player attacks (not when hit) with 3D audio
-      if (frame <= 2) {
-        playRandomSound('attack', 0.3, 0.95, 1.15, sourceX, sourceY);
-      }
-      break;
-    case 'walk':
-    case 'run':
-      // Footstep sounds while walking (every 4th frame) with 3D audio
-      if (frame % 4 === 0) {
-        playRandomSound('footsteps', 0.3, 0.8, 1.2, sourceX, sourceY);
-      }
-      break;
-    case 'land':
-      playRandomSound('footsteps', 0.5, 0.8, 1.0, sourceX, sourceY);
-      break;
-    case 'death':
-    case 'death_front':
-    case 'death_behind':
-      // DEATH sounds when any player dies with 3D audio
-      if (frame === 0) {
-        playRandomSound('death', 0.7, 0.8, 1.0, sourceX, sourceY);
-      }
-      break;
-    // Note: Shield hit sounds are handled in hit events
-    // Note: Woosh sounds are handled in jump events
-  }
-}
-
-// Play sound for specific animation frame
-function playFrameSound(playerId, character, state, frame) {
-  const animData = hitboxData[character]?.animations[state];
-  if (!animData || !animData.frameSounds) return;
-  
-  // Check if this frame has a sound
-  const frameSound = animData.frameSounds.find(fs => fs.frame === frame);
-  if (!frameSound) return;
-  
-  // Use a tracking key that includes both player ID and state
-  const key = `${playerId}_${state}_${frame}`;
-  const now = Date.now();
-  
-  // More aggressive spam prevention for attack sounds (300ms cooldown)
-  const cooldown = state === 'attack' ? 300 : 100;
-  if (lastPlayedFrame[key] && (now - lastPlayedFrame[key]) < cooldown) {
-    return; // Block duplicate sounds
-  }
-  
-  // Store timestamp instead of boolean
-  lastPlayedFrame[key] = now;
-  
-  // Play the sound
-  let soundToPlay = sounds.custom[frameSound.sound];
-  if (!soundToPlay) {
-    return; // Silently skip missing sounds
-  }
-  
-  // If it's an array (folder with variations), pick random one
-  if (Array.isArray(soundToPlay)) {
-    const randomIndex = Math.floor(Math.random() * soundToPlay.length);
-    soundToPlay = soundToPlay[randomIndex];
-  }
-  
-  // Clone and play
-  const clone = soundToPlay.cloneNode();
-  clone.volume = frameSound.volume || 0.6;
-  clone.playbackRate = frameSound.pitch || 1.0;
-  clone.play().catch(e => console.log('Sound play failed:', e));
 }
 
 // Load random background
 async function loadRandomBackground() {
   if (backgroundFiles.length === 0) {
-    console.log('No background images available - using solid color');
+    // Using solid color background
     backgroundLoaded = false;
     return Promise.resolve();
   }
@@ -942,7 +1206,6 @@ async function loadRandomBackground() {
   return new Promise((resolve, reject) => {
     backgroundImage.onload = () => {
       backgroundLoaded = true;
-      console.log(`Loaded background: ${selectedBg}`);
       resolve();
     };
     backgroundImage.onerror = () => {
@@ -1003,18 +1266,16 @@ function updateStartButton() {
   startBtn.disabled = !(hasName && hasCharacter);
 }
 
-startBtn.addEventListener('click', startGame);
+startBtn.addEventListener('click', () => {
+  startBackgroundMusicOnInteraction(); // Start background music on first interaction
+  startGame();
+});
 
 // Reload hitboxes (can be called from console)
 async function reloadHitboxes() {
   try {
     const response = await fetch('/hitboxes.json?t=' + Date.now()); // Cache bust
     hitboxData = await response.json();
-    console.log('✓ Changes applied!');
-    console.log('Knight game scale:', hitboxData.knight?.gameScale);
-    console.log('Spartan game scale:', hitboxData.spartan?.gameScale);
-    console.log('Warrior game scale:', hitboxData.warrior?.gameScale);
-    console.log('Your custom changes are now active!');
     alert('Changes applied! Your custom settings are now active!');
   } catch (error) {
     console.error('Error applying changes:', error);
@@ -1040,7 +1301,6 @@ function restoreFormState() {
 async function startGame() {
   // Prevent multiple simultaneous starts
   if (gameStarting) {
-    console.log('Game start already in progress...');
     return;
   }
   
@@ -1105,10 +1365,8 @@ async function startGame() {
   try {
     const response = await fetch('/hitboxes.json');
     hitboxData = await response.json();
-    console.log('✓ Hitbox data loaded successfully');
   } catch (error) {
     console.error('Error loading hitbox data:', error);
-    // Continue with default hitbox data
   }
   
   // Show loading screen with progress bar
@@ -1126,7 +1384,6 @@ async function startGame() {
   // Load sprite sheets with new optimized system
   try {
     await loadSpriteSheets();
-    console.log('✅ OPTIMIZED sprite loading successful!');
     
     // Final loading message
     document.querySelector('.loading-progress-text').textContent = 'Entering battle arena...';
@@ -1135,8 +1392,8 @@ async function startGame() {
     await new Promise(resolve => setTimeout(resolve, 500));
     
   } catch (error) {
-    console.error('❌ Critical error loading sprites:', error);
-    alert('⚠️ Failed to load game assets. Please check your connection and try again.');
+    console.error('Critical error loading sprites:', error);
+    alert('Failed to load game assets. Please check your connection and try again.');
     
     // Restore form state on error
     restoreFormState();
@@ -1148,26 +1405,31 @@ async function startGame() {
   try {
     await loadEmojiImages();
   } catch (error) {
-    console.warn('Warning: Could not load emoji images:', error);
+    console.warn('Could not load emoji images:', error);
   }
   
   // Load optimized numbered sounds (1.wav, 2.wav, 3.wav...)
   try {
     document.querySelector('.loading-progress-text').textContent = 'Loading sound effects...';
     await loadSounds();
-    console.log('✅ OPTIMIZED numbered sound loading successful!');
   } catch (error) {
-    console.warn('Warning: Could not load some sounds:', error);
+    console.warn('Could not load some sounds:', error);
+  }
+  
+  // Load and start background music
+  try {
+    await loadBackgroundMusic();
+  } catch (error) {
+    console.warn('Could not load background music:', error);
   }
   
   // Skip old custom sound loading - all sounds now use numbered system
-  console.log('⏭️ Skipping legacy sound loading (all sounds now use 1.wav, 2.wav system)');
   
   // Load random background
   try {
     await loadRandomBackground();
   } catch (error) {
-    console.warn('Warning: Could not load background:', error);
+    console.warn('Could not load background:', error);
   }
   
   // Connect to server
@@ -1175,8 +1437,7 @@ async function startGame() {
   
   // Handle name already exists error
   socket.on('nameExists', (data) => {
-    alert(`⚠️ ${data.message}\n\nPlease choose a different warrior name.`);
-    console.log('Name conflict:', data.message);
+    alert(`${data.message}\n\nPlease choose a different warrior name.`);
     
     // Restore form state
     restoreFormState();
@@ -1187,7 +1448,6 @@ async function startGame() {
   });
   
   socket.on('connect', () => {
-    console.log('Connected to server');
     socket.emit('joinGame', { name: myName, character: myCharacter });
   });
   
@@ -1241,7 +1501,6 @@ async function startGame() {
       
       // If player is dying on client (even if animation complete), DON'T override their death state
       if (existingPlayer && existingPlayer.isDying) {
-        // Only update position and non-animation properties
         existingPlayer.x = sp.x;
         existingPlayer.y = sp.y;
         existingPlayer.hp = sp.hp;
@@ -1249,20 +1508,14 @@ async function startGame() {
         existingPlayer.invincible = sp.invincible;
         existingPlayer.invincibleTime = sp.invincibleTime;
         existingPlayer.alive = sp.alive;
-        // Update facingRight so it's correct when respawning
         existingPlayer.facingRight = sp.facingRight;
-        // DON'T update: state, animationFrame, animationTime, isDying
-        // Keep client's death animation state completely protected
-        return; // Skip rest of processing for dying players
+        return; 
       }
       
       if (players[sp.id]) {
-        // Store old animation frame before updating
         const previousFrame = players[sp.id].animationFrame;
         
-        // Fix for attack animation running twice: prevent frame jumps in attack animation
         if (sp.state === 'attack' && oldState === 'attack') {
-          // Only allow frame to increase by at most 1 from previous frame
           if (sp.animationFrame > previousFrame + 1) {
             sp.animationFrame = previousFrame + 1;
           }
@@ -1273,26 +1526,20 @@ async function startGame() {
         players[sp.id] = sp;
       }
       
-      // Detect animation loop - if frame went backwards, clear sound tracking (skip for death animations)
-      if (!sp.state.includes('death')) {
-        const trackingKey = `${sp.id}_${sp.state}`;
-        const lastHighest = highestFrameSeen[trackingKey] || 0;
+      const trackingKey = `${sp.id}_${sp.state}`;
+      const lastHighest = highestFrameSeen[trackingKey] || 0;
         
-        if (sp.animationFrame < lastHighest) {
-          // Animation looped! Clear all sound timestamps for this animation
-          console.log(`🔄 Animation loop detected for ${sp.state}: frame ${lastHighest} → ${sp.animationFrame}`);
-          Object.keys(lastPlayedFrame).forEach(key => {
-            if (key.startsWith(`${sp.id}_${sp.state}_`)) {
-              delete lastPlayedFrame[key];
-            }
-          });
-          highestFrameSeen[trackingKey] = sp.animationFrame;
-        } else {
-          highestFrameSeen[trackingKey] = Math.max(lastHighest, sp.animationFrame);
-        }
+      if (sp.animationFrame < lastHighest) {
+        Object.keys(lastPlayedFrame).forEach(key => {
+          if (key.startsWith(`${sp.id}_${sp.state}_`)) {
+            delete lastPlayedFrame[key];
+          }
+        });
+        highestFrameSeen[trackingKey] = sp.animationFrame;
+      } else {
+        highestFrameSeen[trackingKey] = Math.max(lastHighest, sp.animationFrame);
       }
       
-      // Clear tracking when animation changes
       if (oldState !== sp.state) {
         const trackingKey = `${sp.id}_${sp.state}`;
         Object.keys(lastPlayedFrame).forEach(key => {
@@ -1302,31 +1549,26 @@ async function startGame() {
         });
         delete highestFrameSeen[trackingKey];
         
-        // WOOSH sound when player starts jumping (enters 'air' state) with 3D audio
         if (sp.state === 'air' && oldState !== 'air') {
-          playRandomSound('jump', 0.4, 0.9, 1.2, sp.x, sp.y);
+          const jumpPlayer = players[sp.id];
+          playRandomSound('jump', 0.5, 0.9, 1.3, jumpPlayer?.x, jumpPlayer?.y);
         }
         
-        // Play automatic animation sounds when state changes with 3D positioning
         playAnimationSound(sp.state, 0, sp.x, sp.y);
       }
       
-      // Check if we should play frame sounds - prevent duplicate sounds with more strict checking
       if ((oldFrame !== sp.animationFrame || oldState !== sp.state) && 
           (sp.state !== 'attack' || !lastPlayedFrame[`${sp.id}_${sp.state}_${sp.animationFrame}`])) {
         playFrameSound(sp.id, sp.character, sp.state, sp.animationFrame);
       }
       
-      // Auto-play footsteps during walk animation with 3D positioning
       if (sp.state === 'walk' && oldFrame !== sp.animationFrame) {
-        // Play footstep every 4 frames for natural rhythm with 3D audio
         if (sp.animationFrame % 4 === 0) {
           playRandomSound('footsteps', 0.4, 0.9, 1.1, sp.x, sp.y);
         }
       }
     });
     
-    // Update HUD
     if (players[myId]) {
       const hpPercent = (players[myId].hp / players[myId].maxHp) * 100;
       hpBar.style.width = hpPercent + '%';
@@ -1347,45 +1589,31 @@ async function startGame() {
   
   // Listen for hit events to create effects
   socket.on('playerHit', (data) => {
-    // Check if attack was blocked by shield
     if (data.blocked) {
-      // SHIELD HIT sounds when shielded player gets hit - 3D positioned
       const targetPlayer = players[data.targetId];
       playRandomSound('shield_hit', 0.4, 1.2, 1.5, targetPlayer?.x, targetPlayer?.y);
       
       if (data.targetId === myId) {
-        // Minimal screen shake for blocking
         screenShake.intensity = 5;
-        flashEffect.alpha = 0.1; // Blue flash for block
+        flashEffect.alpha = 0.1; 
       } else if (data.attackerId === myId) {
-        // Feedback for attacker - attack was blocked!
         screenShake.intensity = 3;
       }
       
-      // Create blue spark particles for shield block
-      if (targetPlayer) {
-        createShieldBlockParticles(targetPlayer.x, targetPlayer.y - 20, 15);
-      }
+      createShieldBlockParticles(targetPlayer.x, targetPlayer.y - 20, 15);
     } else {
-      // Normal hit - maximum 30% volume with 3D positioning
       const hitTarget = players[data.targetId];
       playSound('hurt', false, hitTarget?.x, hitTarget?.y);
       playRandomSound('hit', 0.3, 0.9, 1.2, hitTarget?.x, hitTarget?.y);
       
       if (data.targetId === myId) {
-        // Screen shake for being hit
         screenShake.intensity = 15;
         flashEffect.alpha = 0.4;
       } else if (data.attackerId === myId) {
-        // Small shake for hitting someone
         screenShake.intensity = 8;
       }
       
-      // Create impact particles
-      const target = players[data.targetId];
-      if (target) {
-        createImpactParticles(target.x, target.y - 20, 20);
-      }
+      createImpactParticles(hitTarget.x, hitTarget.y - 20, 20);
     }
   });
   
@@ -1393,13 +1621,9 @@ async function startGame() {
   socket.on('shieldBlock', (data) => {
     const defender = players[data.defenderId];
     if (defender) {
-      // Create extra shield block particles for emphasis
       createShieldBlockParticles(data.x, data.y - 20, 20);
       
-      // Screen shake for dramatic effect
       shakeScreen(8, 0.2);
-      
-      console.log(`🛡️ SHIELD BLOCK! ${defender.name} blocked an attack!`);
     }
   });
 
@@ -1454,36 +1678,23 @@ async function startGame() {
   
   // Listen for corpse hit events to create blood
   socket.on('corpseHit', (data) => {
-    // Play hit sound - maximum 30% volume with 3D positioning
     playRandomSound('hit', 0.3, 0.9, 1.2, data.x, data.y);
     
-    // Create blood splatter particles (less than death, but still visible)
-    createDeathParticles(data.x, data.y, 15); // 30 particles (15 * 2)
-    
-    // Small screen shake if you hit the corpse
-    const corpseTarget = players[data.targetId];
-    if (corpseTarget) {
-      screenShake.intensity = 5;
-    }
+    createDeathParticles(data.x, data.y, 15); 
+    screenShake.intensity = 5;
   });
   
   socket.on('playerDied', (data) => {
-    console.log('💀 Player died event:', data);
     const deadPlayer = players[data.id];
     const killer = players[data.killer];
-    console.log('💀 Dead player:', deadPlayer?.name, 'Killer:', killer?.name);
     
     if (deadPlayer) {
-      // Set death animation based on hit direction
       deadPlayer.state = data.deathType || 'death_front';
       deadPlayer.animationFrame = 0;
       deadPlayer.animationTime = 0;
-      deadPlayer.isDying = true; // Flag to show death animation
-      deadPlayer.deathAnimationComplete = false; // Animation not finished yet
+      deadPlayer.isDying = true; 
+      deadPlayer.deathAnimationComplete = false; 
       
-      console.log(`💀 ${deadPlayer.name} starting death animation: ${deadPlayer.state}`);
-      
-      // If it's me who died, show gloomy death screen
       if (data.id === myId) {
         currentInput.left = false;
         currentInput.right = false;
@@ -1596,6 +1807,8 @@ async function startGame() {
     playSound('chat');
     
     addChatMessage(data.name, data.message, data.id === myId);
+
+    setPlayerChatBubble(data.id, data.message);
   });
   
   // Emoji events
@@ -1658,6 +1871,23 @@ function addChatMessage(name, message, isMe) {
   while (chatMessages.children.length > 50) {
     chatMessages.removeChild(chatMessages.firstChild);
   }
+}
+
+function setPlayerChatBubble(playerId, message) {
+  const p = players[playerId];
+  if (!p) return;
+
+  const text = String(message || '').trim();
+  if (!text) {
+    p.chatBubble = null;
+    return;
+  }
+
+  p.chatBubble = {
+    text,
+    life: CHAT_BUBBLE_DURATION,
+    maxLife: CHAT_BUBBLE_DURATION
+  };
 }
 
 function sendChatMessage() {
@@ -1931,6 +2161,17 @@ function updateParticles(dt) {
   }
 }
 
+function updateChatBubbles(dt) {
+  for (const id in players) {
+    const p = players[id];
+    if (!p || !p.chatBubble) continue;
+
+    p.chatBubble.life -= dt;
+    if (p.chatBubble.life <= 0) {
+      p.chatBubble = null;
+    }
+  }
+}
 
 function drawParticles() {
   particles.forEach(p => {
@@ -2127,18 +2368,45 @@ function initTrees() {
 
 // Load emoji images
 async function loadEmojiImages() {
-  // Emojis disabled - no emoji assets available
-  console.log('Emoji system disabled (no assets)');
-  return;
+  const emojiPromises = [];
+  
+  // Load emojis for all characters (using same emojis for all)
+  for (let i = 1; i <= EMOJI_COUNT; i++) {
+    const img = new Image();
+    img.src = `/assets/emojis/${i}.png`; // Assuming .png format
+    
+    // Store the image in all character slots
+    for (const char of Object.keys(emojiImages)) {
+      emojiImages[char][i] = img;
+    }
+    
+    // Create a promise for this image load
+    const loadPromise = new Promise((resolve) => {
+      img.onload = resolve;
+      img.onerror = () => {
+        console.warn(`Failed to load emoji ${i}.png`);
+        resolve();
+      };
+    });
+    
+    emojiPromises.push(loadPromise);
+  }
+  
+  await Promise.all(emojiPromises);
+  console.log(`Loaded ${EMOJI_COUNT} emojis`);
+  return emojiImages;
 }
 
 // Spawn emoji above player
 function spawnEmoji(playerId, emojiNumber) {
   const player = players[playerId];
-  if (!player || !player.character) return;
+  if (!player || !player.character || emojiNumber < 1 || emojiNumber > EMOJI_COUNT) return;
   
   const emojiImg = emojiImages[player.character]?.[emojiNumber];
-  if (!emojiImg) return;
+  if (!emojiImg || !emojiImg.complete || emojiImg.naturalWidth === 0) {
+    console.warn(`Emoji ${emojiNumber} not loaded`);
+    return;
+  }
   
   // Remove any existing emoji for this player
   const existingIndex = activeEmojis.findIndex(e => e.playerId === playerId);
@@ -2148,11 +2416,20 @@ function spawnEmoji(playerId, emojiNumber) {
   
   // Add new emoji
   activeEmojis.push({
-    playerId: playerId, // Track which player this belongs to
+    playerId: playerId,
+    character: player.character,
+    number: emojiNumber,
     img: emojiImg,
     life: 2.5, // 2.5 seconds lifetime
-    maxLife: 2.5
+    maxLife: 2.5,
+    x: player.x,
+    y: player.y - 80, // Position above player
+    scale: 1.5, // Slightly larger size
+    startTime: Date.now()
   });
+  
+  // Play a sound effect when emoji appears
+  playSound('jump', 0.3);
 }
 
 // Update emoji animations
@@ -2183,9 +2460,6 @@ function drawSnowHills() {
     const scaledHeight = hill.height / PIXEL_SCALE;
     
     // Draw snow hill as white/gray curved shape
-    ctx.globalAlpha = hill.opacity;
-    
-    // Create gradient for snow hill
     const hillGradient = ctx.createLinearGradient(screenX, screenY, screenX, screenY + scaledHeight);
     hillGradient.addColorStop(0, '#ffffff'); // White at top
     hillGradient.addColorStop(0.7, '#e8f4f8'); // Light blue
@@ -2258,32 +2532,153 @@ function drawTrees() {
 
 // Draw emojis
 function drawEmojis() {
+  ctx.save();
+  ctx.imageSmoothingEnabled = true;
+  
   activeEmojis.forEach(emoji => {
-    if (emojiImages[emoji.player] && emojiImages[emoji.player][emoji.number]) {
-      const img = emojiImages[emoji.player][emoji.number];
-      if (img.complete && img.naturalWidth > 0) {
-        ctx.save();
-        
-        // Apply screen shake
-        const shakeX = Math.sin(Date.now() * 50) * shakeIntensity;
-        const shakeY = Math.cos(Date.now() * 70) * shakeIntensity;
-        
-        // Center on player position with parallax
-        const centerX = RENDER_WIDTH / 2 + (emoji.x - camera.x) / PIXEL_SCALE + shakeX;
-        const centerY = RENDER_HEIGHT / 2 + (emoji.y - camera.y - 80) / PIXEL_SCALE + shakeY;
-        
-        // Floating animation
-        const floatY = Math.sin(Date.now() * 0.003 + emoji.startTime) * 5;
-        
-        ctx.translate(centerX, centerY + floatY);
-        ctx.scale(emoji.scale / PIXEL_SCALE, emoji.scale / PIXEL_SCALE);
-        
-        // Draw emoji
-        ctx.drawImage(img, -img.width / 2, -img.height / 2);
-        ctx.restore();
-      }
+    const player = players[emoji.playerId];
+    if (!player || !emoji.img || !emoji.img.complete || emoji.img.naturalWidth === 0) return;
+
+    const charData = hitboxData[player.character];
+    const animData = charData?.animations?.[player.state];
+    const wrappedFrame = player.animationFrame % (animData?.frames || 1);
+    const nameHitboxScale = (charData?.gameScale || 1.0) / PIXEL_SCALE;
+
+    const x = player.x / PIXEL_SCALE;
+    const y = player.y / PIXEL_SCALE;
+
+    const frameBodyHitboxes = animData?.bodyHitboxes?.filter(hb => hb.frame === wrappedFrame) || [];
+    let hitboxTop;
+    if (frameBodyHitboxes.length > 0) {
+      const topY = Math.min(...frameBodyHitboxes.map(hb => hb.y));
+      hitboxTop = y + topY * nameHitboxScale;
+    } else if (animData?.bodyHitbox) {
+      hitboxTop = y + animData.bodyHitbox.y * nameHitboxScale;
+    } else {
+      hitboxTop = y - 40 / PIXEL_SCALE;
     }
+
+    const frames = spriteSheets[player.character]?.[player.state];
+    const frame = frames && frames.length > 0 ? frames[player.animationFrame % frames.length] : null;
+    const gameScale = (charData?.gameScale || 1.0) / PIXEL_SCALE;
+    const width = frame ? frame.width * gameScale : 120 / PIXEL_SCALE;
+    const fontSize = Math.max(6, width * 0.1);
+    const nameY = hitboxTop - 8;
+
+    const size = 24;
+    const scale = 1.0 + (Math.sin(Date.now() * 0.002) * 0.1);
+
+    const fadeIn = Math.min(1, (2.5 - emoji.life) * 2);
+    const fadeOut = Math.min(1, emoji.life * 2);
+    const alpha = Math.min(fadeIn, fadeOut);
+
+    const floatOffset = Math.sin(Date.now() * 0.002) * 5;
+    const emojiX = x;
+    const emojiY = nameY - (fontSize * 1.4) + floatOffset;
+    
+    ctx.save();
+    ctx.globalAlpha = alpha * 0.9;
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.7)';
+    ctx.shadowBlur = 8;
+    ctx.shadowOffsetX = 2;
+    ctx.shadowOffsetY = 2;
+
+    ctx.drawImage(
+      emoji.img,
+      emojiX - (size * scale) / 2,
+      emojiY - (size * scale) / 2,
+      size * scale,
+      size * scale
+    );
+
+    ctx.restore();
   });
+    
+  ctx.restore();
+}
+
+function drawChatBubbles() {
+  ctx.save();
+  ctx.imageSmoothingEnabled = true;
+
+  for (const id in players) {
+    const p = players[id];
+    if (!p || !p.chatBubble || !p.chatBubble.text) continue;
+    if ((p.hp <= 0 || p.alive === false) && !p.isDying) continue;
+
+    const charData = hitboxData[p.character];
+    const animData = charData?.animations?.[p.state];
+    const wrappedFrame = p.animationFrame % (animData?.frames || 1);
+    const nameHitboxScale = (charData?.gameScale || 1.0) / PIXEL_SCALE;
+
+    const x = p.x / PIXEL_SCALE;
+    const y = p.y / PIXEL_SCALE;
+
+    const frameBodyHitboxes = animData?.bodyHitboxes?.filter(hb => hb.frame === wrappedFrame) || [];
+    let hitboxTop;
+    if (frameBodyHitboxes.length > 0) {
+      const topY = Math.min(...frameBodyHitboxes.map(hb => hb.y));
+      hitboxTop = y + topY * nameHitboxScale;
+    } else if (animData?.bodyHitbox) {
+      hitboxTop = y + animData.bodyHitbox.y * nameHitboxScale;
+    } else {
+      hitboxTop = y - 40 / PIXEL_SCALE;
+    }
+
+    const frames = spriteSheets[p.character]?.[p.state];
+    const frame = frames && frames.length > 0 ? frames[p.animationFrame % frames.length] : null;
+    const gameScale = (charData?.gameScale || 1.0) / PIXEL_SCALE;
+    const width = frame ? frame.width * gameScale : 120 / PIXEL_SCALE;
+    const fontSize = Math.max(5, width * 0.08);
+    const nameY = hitboxTop - 8;
+
+    const fadeIn = Math.min(1, (p.chatBubble.maxLife - p.chatBubble.life) * 4);
+    const fadeOut = Math.min(1, p.chatBubble.life * 2);
+    const alpha = Math.min(fadeIn, fadeOut);
+
+    let text = p.chatBubble.text;
+    if (text.length > 48) text = text.slice(0, 47) + '…';
+
+    ctx.font = `${fontSize}px MedievalSharp, serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+
+    const paddingX = Math.max(4, fontSize * 0.4);
+    const paddingY = Math.max(3, fontSize * 0.25);
+    const textWidth = ctx.measureText(text).width;
+    const bubbleWidth = textWidth + paddingX * 2;
+    const bubbleHeight = fontSize + paddingY * 2;
+    const bubbleX = x - bubbleWidth / 2;
+    const bubbleY = nameY - bubbleHeight - (fontSize * 0.9);
+
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = 'rgba(26, 15, 10, 0.85)';
+    ctx.strokeStyle = 'rgba(218, 165, 32, 0.9)';
+    ctx.lineWidth = Math.max(1, fontSize * 0.1);
+
+    const r = Math.max(4, fontSize * 0.5);
+    ctx.beginPath();
+    ctx.moveTo(bubbleX + r, bubbleY);
+    ctx.lineTo(bubbleX + bubbleWidth - r, bubbleY);
+    ctx.quadraticCurveTo(bubbleX + bubbleWidth, bubbleY, bubbleX + bubbleWidth, bubbleY + r);
+    ctx.lineTo(bubbleX + bubbleWidth, bubbleY + bubbleHeight - r);
+    ctx.quadraticCurveTo(bubbleX + bubbleWidth, bubbleY + bubbleHeight, bubbleX + bubbleWidth - r, bubbleY + bubbleHeight);
+    ctx.lineTo(bubbleX + r, bubbleY + bubbleHeight);
+    ctx.quadraticCurveTo(bubbleX, bubbleY + bubbleHeight, bubbleX, bubbleY + bubbleHeight - r);
+    ctx.lineTo(bubbleX, bubbleY + r);
+    ctx.quadraticCurveTo(bubbleX, bubbleY, bubbleX + r, bubbleY);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle = '#f4e4c1';
+    ctx.strokeStyle = 'rgba(0,0,0,0.7)';
+    ctx.lineWidth = Math.max(1, fontSize * 0.12);
+    ctx.strokeText(text, x, bubbleY + bubbleHeight / 2);
+    ctx.fillText(text, x, bubbleY + bubbleHeight / 2);
+  }
+
+  ctx.restore();
 }
 
 // Sprite name patterns
@@ -2331,7 +2726,7 @@ let preloadCompleted = false;
 
 // Optimized sprite loading using new 1.png, 2.png... pattern
 async function loadSpriteSheets() {
-  console.log('🚀 Starting OPTIMIZED sprite loading with new naming pattern...');
+  // Starting sprite loading
   
   const char = 'knight';
   spriteSheets[char] = {};
@@ -2357,7 +2752,7 @@ async function loadSpriteSheets() {
     const basePath = `/assets/player sprites/knight/${animation.folder}/`;
     loadingProgress.currentAnimation = animation.folder;
     
-    console.log(`📂 Preloading ${animation.folder}...`);
+    // Loading animation frames
     
     if (animation.folder === 'jump') {
       // Special handling for jump - use first frame for air, second for land
@@ -2423,7 +2818,7 @@ async function loadSpriteSheets() {
         hitboxData[char].animations[animation.key].frames = validFrames.length;
       }
       
-      console.log(`  ✅ Loaded ${validFrames.length} frames for ${animation.folder}`);
+      // Loaded frames for animation
     } else {
       console.error(`  ❌ No frames loaded for ${animation.folder}!`);
     }
@@ -2433,7 +2828,7 @@ async function loadSpriteSheets() {
   await Promise.all(loadPromises);
   
   preloadCompleted = true;
-  console.log(`\n🎉 OPTIMIZED loading complete! Loaded ${loadingProgress.loaded} frames total`);
+  // All frames loaded
   
   // Update progress bar to 100%
   updateProgressBar(100);
@@ -2519,6 +2914,8 @@ function updateProgressBar(percent) {
 
 // Input handling
 document.addEventListener('keydown', (e) => {
+  startBackgroundMusicOnInteraction(); // Start background music on first interaction
+  
   if (chatOpen || document.activeElement === chatInput || document.activeElement === nameInput) {
     return;
   }
@@ -2538,12 +2935,12 @@ document.addEventListener('keydown', (e) => {
     currentInput.shield = true;
   }
   
-  // Emoji keys 1-9
-  if (e.key >= '1' && e.key <= '9') {
+  // Emoji keys 1-8 (matching your emoji files)
+  if (e.key >= '1' && e.key <= '8') {
     const emojiNum = parseInt(e.key);
     if (socket && socket.connected && myId) {
       socket.emit('emoji', { emojiNumber: emojiNum });
-      // Show locally too
+      // Show locally with immediate feedback
       spawnEmoji(myId, emojiNum);
     }
   }
@@ -2577,6 +2974,7 @@ document.addEventListener('keyup', (e) => {
 
 // Mouse controls removed - Space is now attack
 
+// ...
 let lastTime = 0;
 let frameCount = 0;
 let fpsTime = 0;
@@ -2599,6 +2997,8 @@ function gameLoop(timestamp) {
   
   // Update emojis
   updateEmojis(dt);
+
+  updateChatBubbles(dt);
   
   // Create trails for moving corpses and handle fading
   for (const id in players) {
@@ -2647,13 +3047,13 @@ function gameLoop(timestamp) {
           // PLAY SOUNDS for animation frames
           playAnimationSound(p.state, p.animationFrame);
           
-          console.log(`💀 ${p.name} death frame: ${p.animationFrame}/${animData.frames} (${p.state})`);
+          console.log(`${p.name} death frame: ${p.animationFrame}/${animData.frames} (${p.state})`);
           
           // Check if death animation finished
           if (p.animationFrame >= animData.frames) {
             p.animationFrame = animData.frames - 1; // Stay on last frame
             p.deathAnimationComplete = true; // Stop advancing frames
-            console.log(`💀 Death animation COMPLETE for ${p.name}, FROZEN on frame ${p.animationFrame}`);
+            console.log(`Death animation COMPLETE for ${p.name}, FROZEN on frame ${p.animationFrame}`);
           }
         }
       } else {
@@ -2951,7 +3351,9 @@ function render() {
   
   // Draw emojis
   drawEmojis();
-  
+
+  drawChatBubbles();
+    
   ctx.restore();
   
   // Draw flash effect (not affected by shake)
@@ -3119,8 +3521,8 @@ function drawPlayer(player, isMe) {
     ctx.imageSmoothingEnabled = false;
   }
   
-  // Draw HP bar with smooth animation - smaller and under name (only if alive)
-  if (!player.isDying && !player.isCorpse && player.hp > 0) {
+  // Draw HP bar with smooth animation - only show under name when Santa hat is owned
+  if (player.ownedItems?.santa_hat && !player.isDying && !player.isCorpse && player.hp > 0) {
     const hpBarWidth = Math.max(20, width * 0.6); // 60% of character width
     const hpBarHeight = Math.max(2, width * 0.05); // Smaller height
     const hpPercent = player.hp / player.maxHp;
@@ -3135,8 +3537,8 @@ function drawPlayer(player, isMe) {
     }
     const displayPercent = player.displayHp / player.maxHp;
     
-    // Position HP bar UNDER name (+ hat if present)
-    const hpBarY = nameY + 2 + (hatHeight > 0 ? (hatHeight + 2) : 0);
+    // Position HP bar directly under the name (Santa hat is already drawn above)
+    const hpBarY = nameY + 2;
     
     // Background (black) - use screen coordinates
     ctx.fillStyle = 'rgba(0,0,0,0.7)';
@@ -3922,7 +4324,7 @@ devSetShieldFrameBtn.addEventListener('click', () => {
     animData.shieldFrame = devCurrentFrame;
     devSaveStatus.textContent = `✓ Shield frame set to ${devCurrentFrame}`;
     devSaveStatus.style.background = '#22c55e';
-    console.log(`🛡️ Set shield frame to ${devCurrentFrame} for ${devCurrentCharacter}`);
+    console.log(`Set shield frame to ${devCurrentFrame} for ${devCurrentCharacter}`);
     
     setTimeout(() => {
       devSaveStatus.textContent = 'Ready';

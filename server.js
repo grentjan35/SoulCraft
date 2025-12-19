@@ -51,7 +51,7 @@ try {
   hitboxData = JSON.parse(data);
   console.log('✓ Hitbox data loaded successfully');
 } catch (error) {
-  console.log('⚠️  No hitbox data found, using defaults');
+  console.log('No hitbox data found, using defaults');
   hitboxData = {};
 }
 
@@ -300,7 +300,7 @@ io.on('connection', (socket) => {
         if (p.onGround && !p.isJumping) {
           p.isJumping = true;
           p.hasDoubleJump = true; // Enable double jump
-          p.vy = -400; // Jump velocity
+          p.vy = -600; // Jump velocity
           p.onGround = false;
           p.state = 'air';
           p.animationFrame = 0;
@@ -310,7 +310,7 @@ io.on('connection', (socket) => {
         }
         // Double jump (in air) - WORKS EVEN WHILE ATTACKING
         else if (!p.onGround && p.hasDoubleJump) {
-          p.vy = -400; // Double jump velocity
+          p.vy = -600; // Double jump velocity
           p.hasDoubleJump = false; // Use up standard double jump
           p.state = 'air';
           p.animationFrame = 0;
@@ -324,7 +324,7 @@ io.on('connection', (socket) => {
         }
         // COMBO JUMPS - Extra jumps from rapid left/right spam!
         else if (!p.onGround && p.comboJumps > 0) {
-          p.vy = -380; // Slightly weaker than normal jump
+          p.vy = -570; // Slightly weaker than normal jump
           p.comboJumps--; // Use one combo jump
           p.state = 'air';
           p.animationFrame = 0;
@@ -333,7 +333,6 @@ io.on('connection', (socket) => {
           p.isAttacking = false;
           p.attackStuckTimer = 0;
           
-          console.log(`🚀 COMBO JUMP! ${p.name} has ${p.comboJumps} jumps left`);
           
           // Emit double jump event for motion blur effect
           io.emit('playerDoubleJump', { id: p.id });
@@ -370,7 +369,6 @@ io.on('connection', (socket) => {
       player.isShieldSlamming = false;
       player.shieldStuckTimer = 0;
       
-      console.log(`💀 Disconnected player ${player.name} dying with ${deathType}`);
       
       // Broadcast death
       io.emit('playerDied', { id: socket.id, killer: null, deathType: deathType });
@@ -582,7 +580,6 @@ function updateGame(dt) {
         if (p.invincibleTime <= 0) {
           p.invincible = false;
           p.invincibleTime = 0; // Reset to 0
-          console.log(`Player ${p.id} invincibility ended`);
         }
       } else {
         // Failsafe: if invincible but time is 0 or negative, turn it off
@@ -640,12 +637,10 @@ function updateGame(dt) {
       p.landingTime = 0;
       
       const location = p.onGround ? 'on ground' : 'in air';
-      console.log(`🛡️ ${p.name} started shielding ${location} - ALL ACTIONS CANCELLED`);
     } else if (!input.shield && p.isShielding && !p.shieldReleasing) {
       // Released shield - play remaining animation quickly
       p.isShielding = false;
       p.shieldReleasing = true;
-      console.log(`🛡️ ${p.name} releasing shield, playing remaining frames`);
     } else if (!input.shield) {
       // Clear shield request if S is released
       p.wantsToShield = false;
@@ -663,7 +658,6 @@ function updateGame(dt) {
       // CANCEL COMBO JUMPS when attacking
       p.comboJumps = 0;
       p.comboLevel = 0;
-      console.log(`⚔️ ${p.name} attacked - combo jumps CANCELLED`);
       
       // STOP MOVEMENT only when attacking on ground (keep air momentum)
       if (p.onGround) {
@@ -706,7 +700,6 @@ function updateGame(dt) {
               p.state = p.onGround ? 'idle' : 'air';
               p.animationFrame = 0;
               p.animationTime = 0;
-              console.log(`🛡️ ${p.name} shield animation complete`);
             }
           }
         }
@@ -889,7 +882,6 @@ function updateGame(dt) {
         p.attackCooldown = 0;
         p.landingTime = 0;
         
-        console.log(`🛡️ ${p.name} landed while shielding - continuing shield hold at frame ${p.animationFrame}`);
       }
       // Trigger landing animation if just landed and not attacking or shielding
       else if (!p.isAttacking && !p.isShielding) {
@@ -933,12 +925,10 @@ function updateGame(dt) {
           if (timeSinceLastChange < requiredSpeed && p.comboJumps < p.maxComboJumps) {
             p.comboJumps++;
             p.comboLevel++; // Increase difficulty for next combo
-            console.log(`🔥 COMBO x${p.comboLevel}! ${p.name} earned jump #${p.comboJumps} (${timeSinceLastChange}ms < ${requiredSpeed}ms)`);
           } else if (timeSinceLastChange > resetThreshold) {
             // Reset combo if too slow
             p.comboJumps = 0;
             p.comboLevel = 0;
-            console.log(`💔 Combo broken for ${p.name} (too slow: ${timeSinceLastChange}ms)`);
           }
           
           p.directionChangeTime = Date.now();
@@ -1046,6 +1036,7 @@ function updateGame(dt) {
       for (const otherId in players) {
         const other = players[otherId];
         if (other.id === p.id || other.isDying || other.isCorpse) continue;
+        if (p.id >= other.id) continue;
         
         const pScale = hitboxData[p.character]?.gameScale || 1.0;
         const otherScale = hitboxData[other.character]?.gameScale || 1.0;
@@ -1097,8 +1088,8 @@ function updateGame(dt) {
         
         if (collisionDetected) {
           const pushDir = (p.x < other.x) ? -1 : 1;
-          const SOFT_PUSH_CAP = 30;
-          const SOFT_PUSH_FACTOR = 0.15;
+          const SOFT_PUSH_CAP = 20;
+          const SOFT_PUSH_FACTOR = 0.25;
           const softPush = Math.min(minOverlapX, SOFT_PUSH_CAP) * SOFT_PUSH_FACTOR;
 
           p.x += pushDir * softPush;
@@ -1107,6 +1098,24 @@ function updateGame(dt) {
           const avgVx = (p.vx + other.vx) / 2;
           p.vx = avgVx;
           other.vx = avgVx;
+
+          if (minOverlapY < minOverlapX) {
+            const ALLOWED_SINK = 12;
+            const SUPPORT_FACTOR = 0.75;
+
+            const separation = Math.max(0, minOverlapY - ALLOWED_SINK);
+            if (separation > 0) {
+              if (p.y < other.y && p.vy > 0) {
+                const pushUp = separation * SUPPORT_FACTOR;
+                p.y -= pushUp;
+                p.vy = 0;
+              } else if (other.y < p.y && other.vy > 0) {
+                const pushUp = separation * SUPPORT_FACTOR;
+                other.y -= pushUp;
+                other.vy = 0;
+              }
+            }
+          }
         }
       }
     }
@@ -1203,8 +1212,12 @@ function checkAttackHits(attacker) {
         // CHECK IF TARGET IS SHIELDING - BLOCK/REDUCE DAMAGE!
         let isBlocked = false;
         let damageReduction = 0;
+
+        const attackFromFront = target.facingRight
+          ? attacker.x >= target.x
+          : attacker.x <= target.x;
         
-        if (target.isShielding && target.state === 'shield') {
+        if (attackFromFront && target.isShielding && target.state === 'shield') {
           // Get shield hitboxes for target's current frame
           const targetShieldAnimData = hitboxData[target.character]?.animations?.shield;
           if (targetShieldAnimData && targetShieldAnimData.shieldHitboxes) {
@@ -1223,7 +1236,6 @@ function checkAttackHits(attacker) {
                   attackY + (attackHb.height * attackerScale) > shieldY) {
                 isBlocked = true;
                 damageReduction = 0.9; // 90% damage reduction!
-                console.log(`🛡️ SHIELD BLOCK! ${target.name} blocked ${attacker.name}'s attack!`);
                 
                 // Emit shield block event for visual/audio feedback
                 io.emit('shieldBlock', {
@@ -1297,9 +1309,6 @@ function checkAttackHits(attacker) {
         if (canDamage && target.hp <= 0) {
           const hitFromBehind = attacker.facingRight === target.facingRight;
           const deathType = hitFromBehind ? 'death_behind' : 'death_front';
-          console.log(`💀 Death: ${target.name} killed by ${attacker.name}`);
-          console.log(`   Attacker facing: ${attacker.facingRight ? 'RIGHT' : 'LEFT'}, Target facing: ${target.facingRight ? 'RIGHT' : 'LEFT'}`);
-          console.log(`   Hit from behind: ${hitFromBehind}, Animation: ${deathType}`);
           killPlayer(target, attacker.id, deathType);
         }
         break;
@@ -1347,16 +1356,16 @@ setInterval(() => {
 server.listen(PORT, '0.0.0.0', async () => {
   const localIP = getLocalIP();
   console.log('\n======================================');
-  console.log('⚔️  Medieval Battle Arena Server Started!');
+  console.log('Medieval Battle Arena Server Started!');
   console.log('======================================');
-  console.log(`\n🏰 Port: ${PORT}`);
-  console.log(`🏰 Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`\nPort: ${PORT}`);
+  console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
   
   if (process.env.RENDER_EXTERNAL_URL) {
-    console.log(`🌐 Public URL: ${process.env.RENDER_EXTERNAL_URL}`);
+    console.log(`Public URL: ${process.env.RENDER_EXTERNAL_URL}`);
   } else {
-    console.log(`🏰 Local: http://localhost:${PORT}`);
-    console.log(`🏰 Network (WiFi): http://${localIP}:${PORT}`);
+    console.log(`Local: http://localhost:${PORT}`);
+    console.log(`Network (WiFi): http://${localIP}:${PORT}`);
   }
   
   console.log('======================================\n');
