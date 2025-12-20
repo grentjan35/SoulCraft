@@ -3542,8 +3542,8 @@ function drawPlayer(player, isMe) {
     ctx.imageSmoothingEnabled = false;
   }
   
-  // Draw HP bar with smooth animation - only show under name when Santa hat is owned
-  if (player.ownedItems?.santa_hat && !player.isDying && !player.isCorpse && player.hp > 0) {
+  // Draw HP bar with smooth animation - show for all players
+  if (!player.isDying && !player.isCorpse && player.hp > 0) {
     const hpBarWidth = Math.max(20, width * 0.6); // 60% of character width
     const hpBarHeight = Math.max(2, width * 0.05); // Smaller height
     const hpPercent = player.hp / player.maxHp;
@@ -3558,7 +3558,7 @@ function drawPlayer(player, isMe) {
     }
     const displayPercent = player.displayHp / player.maxHp;
     
-    // Position HP bar directly under the name (Santa hat is already drawn above)
+    // Position HP bar directly under the name
     const hpBarY = nameY + 2;
     
     // Background (black) - use screen coordinates
